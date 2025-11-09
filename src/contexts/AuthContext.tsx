@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // TEST MODE: Use mock data for frontend development
     const mockUsers: Record<string, User> = {
       'patient@example.com': {
-        id: 'test-patient-123',
+        id: '00000000-0000-0000-0000-000000000001',
         email: 'patient@example.com',
         name: 'John Doe',
         role: 'patient',
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verified: true
       },
       'therapist@example.com': {
-        id: 'test-therapist-456',
+        id: '00000000-0000-0000-0000-000000000002',
         email: 'therapist@example.com',
         name: 'Dr. Sarah Smith',
         role: 'therapist',
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verified: true
       },
       'admin@example.com': {
-        id: 'test-admin-789',
+        id: '00000000-0000-0000-0000-000000000003',
         email: 'admin@example.com',
         name: 'Admin User',
         role: 'admin',

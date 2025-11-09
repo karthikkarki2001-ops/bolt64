@@ -274,12 +274,12 @@ function BookingPage() {
   
   // Check if a specific time slot is already booked (only confirmed bookings)
   const isSlotBooked = (therapistId: string, date: string, time: string) => {
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+    const allBookings = mockDataService.getAllBookings();
     return allBookings.some((booking: any) =>
-      (booking.therapistId === therapistId || booking.therapistName === therapistId) &&
+      booking.therapistId === therapistId &&
       booking.date === date &&
       booking.time === time &&
-      booking.status === 'confirmed'
+      (booking.status === 'confirmed' || booking.status === 'pending_confirmation')
     );
   };
 
@@ -318,6 +318,16 @@ function BookingPage() {
       return;
     }
 
+    // Check if slot is already booked before proceeding
+    if (isSlotBooked(selectedTherapist.id, selectedDate, selectedTime)) {
+      toast.error('This time slot has already been booked. Please select another time.');
+      setShowPaymentModal(false);
+      // Refresh time slots
+      const slots = generateTimeSlots(selectedTherapist, selectedDate);
+      setAvailableTimeSlots(slots);
+      return;
+    }
+
     // Validate card details
     if (!cardNumber || !cardCVV || !cardExpiry || !cardName) {
       toast.error('Please fill in all card details');
@@ -344,6 +354,15 @@ function BookingPage() {
     };
 
     const displayTime = convertTo12Hour(selectedTime);
+
+    // Double-check one more time before creating booking
+    if (isSlotBooked(selectedTherapist.id, selectedDate, selectedTime)) {
+      toast.error('This time slot was just booked. Please select another time.');
+      setShowPaymentModal(false);
+      const slots = generateTimeSlots(selectedTherapist, selectedDate);
+      setAvailableTimeSlots(slots);
+      return;
+    }
 
     // Create booking object ONLY after payment
     const booking: Appointment = {

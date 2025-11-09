@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 function TherapistDashboard() {
   const { user } = useAuth();
@@ -22,10 +22,10 @@ function TherapistDashboard() {
   const [recentProgressUpdates, setRecentProgressUpdates] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadAppointments = async () => {
+    const loadAppointments = () => {
       if (!user?.id) return;
       try {
-        const allBookings = await api.bookings.getByTherapist(user.id);
+        const allBookings = mockDataService.getBookingsByTherapist(user.id);
 
         const today = new Date().toISOString().split('T')[0];
         const todaysAppts = allBookings.filter((apt: any) => apt.date === today);
@@ -125,29 +125,14 @@ function TherapistDashboard() {
 
     loadAppointments();
     loadProgressUpdates();
-    
-    // Set up interval to refresh appointments
-    const interval = setInterval(() => {
+
+    // Listen for updates from mock service
+    const unsubscribe = mockDataService.onUpdate(() => {
       loadAppointments();
       loadProgressUpdates();
-    }, 5000);
-    
-    // Listen for storage changes
-    const handleStorageChange = () => {
-      loadAppointments();
-      loadProgressUpdates();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('mindcare-data-updated', handleStorageChange);
-    window.addEventListener('mindcare-patient-progress-update', handleStorageChange);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('mindcare-data-updated', handleStorageChange);
-      window.removeEventListener('mindcare-patient-progress-update', handleStorageChange);
-    };
+    });
+
+    return unsubscribe;
   }, [user]);
 
   const getRelativeTime = (timestamp: string) => {

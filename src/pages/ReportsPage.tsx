@@ -13,7 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getAnalytics, updateAnalyticsFromCurrentData, generateTimeSeriesData } from '../utils/analyticsManager';
+import { mockDataService } from '../services/mockDataService';
 import {
   parseBookingAmount,
   isBookingInMonth,
@@ -21,7 +21,6 @@ import {
   calculateRevenueForBookings,
   getBookingsForMonth
 } from '../utils/bookingHelpers';
-import { api } from '../services/api';
 
 function ReportsPage() {
   const { user } = useAuth();
@@ -33,15 +32,15 @@ function ReportsPage() {
   const [therapistSpecificData, setTherapistSpecificData] = useState<any>(null);
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadData = () => {
       try {
         // Load therapist-specific analytics data
-        const therapistAnalytics = await getTherapistSpecificAnalytics();
+        const therapistAnalytics = getTherapistSpecificAnalytics();
         setAnalytics(therapistAnalytics);
         setTherapistSpecificData(therapistAnalytics);
 
         // Generate time series data
-        const timeData = await generateTherapistTimeSeriesData();
+        const timeData = generateTherapistTimeSeriesData();
         setTimeSeriesData(timeData);
       } catch (error) {
         console.error('Failed to load report data:', error);
@@ -51,27 +50,15 @@ function ReportsPage() {
 
     loadData();
 
-    // Set up interval to refresh data
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000);
+    // Listen for updates from mock service
+    const unsubscribe = mockDataService.onUpdate(loadData);
 
-    // Listen for analytics updates
-    const handleAnalyticsUpdate = () => {
-      loadData();
-    };
-
-    window.addEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
-    };
-  }, []);
+    return unsubscribe;
+  }, [user]);
 
   // Function to get therapist-specific analytics
-  const getTherapistSpecificAnalytics = async () => {
-    const allBookings = await api.bookings.getAll();
+  const getTherapistSpecificAnalytics = () => {
+    const allBookings = mockDataService.getAllBookings();
 
     const therapistBookings = allBookings.filter((booking: any) =>
       booking.therapistName === user?.name || booking.therapistId === user?.id
@@ -127,8 +114,8 @@ function ReportsPage() {
     };
   };
   
-  const generateTherapistTimeSeriesData = async () => {
-    const allBookings = await api.bookings.getAll();
+  const generateTherapistTimeSeriesData = () => {
+    const allBookings = mockDataService.getAllBookings();
     const therapistBookings = allBookings.filter((booking: any) =>
       booking.therapistName === user?.name || booking.therapistId === user?.id
     );

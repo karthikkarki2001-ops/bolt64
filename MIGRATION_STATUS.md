@@ -19,11 +19,16 @@ Migration from localStorage to MongoDB + Express.js backend
 - ✅ Authentication service with JWT token management
 - ✅ All API endpoint wrappers created
 
-### Frontend - Updated Pages (Partial)
+### Frontend - Updated Pages (65% Complete)
 - ✅ AuthContext - Uses API for login/register
 - ✅ MoodTrackerPage - Uses API for mood entries
 - ✅ CBTModule - Uses API for CBT records
 - ✅ GratitudeModule - Uses API for gratitude entries
+- ✅ MindfulnessModule - Uses API for sessions
+- ✅ TetrisTherapyModule - Uses API for sessions
+- ✅ ArtTherapyModule - Uses API for sessions
+- ✅ ACTModule - Uses API for values storage
+- ⚠️ BookingPage - Partially updated (API import added)
 
 ## ⚠️ Remaining Work
 
@@ -153,8 +158,8 @@ After migration completion, test:
 
 - **Backend:** 100% ✅
 - **Frontend API Layer:** 100% ✅
-- **Frontend Integration:** ~15% ⚠️
+- **Frontend Integration:** ~65% ⚠️
 
-**Total Migration Progress: ~40%**
+**Total Migration Progress: ~75%**
 
-The backend is production-ready, but the frontend needs significant work to fully integrate with the API.
+The backend is production-ready. Most therapy modules are migrated. Main remaining work: booking system, dashboards, and user management pages.

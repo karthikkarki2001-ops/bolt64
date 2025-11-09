@@ -6,8 +6,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 type TetrominoType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
@@ -144,7 +143,7 @@ function TetrisTherapyModule() {
     setGameState(gameState === 'paused' ? 'playing' : 'paused');
   };
 
-  const endGame = () => {
+  const endGame = async () => {
     setGameState('gameOver');
     const stressReduction = Math.max(0, stressLevel - Math.floor(score / 1000));
     const newFocusScore = Math.min(100, focusScore + Math.floor(score / 100));
@@ -152,31 +151,31 @@ function TetrisTherapyModule() {
     setFocusScore(newFocusScore);
     
     // Save tetris therapy session
-    const tetrisSessions = JSON.parse(localStorage.getItem('mindcare_tetris_sessions') || '[]');
-    const newSession = {
-      id: Date.now().toString(),
-      userId: user?.id,
-      date: new Date().toISOString().split('T')[0],
-      score: score,
-      level: level,
-      linesCleared: linesCleared,
-      gameTime: gameTime,
-      stressReduction: stressLevel - stressReduction,
-      completed: true
-    };
-    tetrisSessions.push(newSession);
-    localStorage.setItem('mindcare_tetris_sessions', JSON.stringify(tetrisSessions));
-    
-    // Update streak
-    updateStreak();
-    
-    // Update therapy progress
     if (user?.id) {
-      updateTherapyCompletion(user.id, 'tetris');
+      try {
+        await api.therapy.createSession({
+          userId: user.id,
+          moduleName: 'tetris',
+          sessionData: {
+            score,
+            level,
+            linesCleared,
+            gameTime,
+            stressReduction: stressLevel - stressReduction,
+            completed: true
+          }
+        });
+
+        await api.streak.update(user.id);
+
+        const progress = await api.therapy.getProgress(user.id);
+        const moduleData = progress.moduleData || {};
+        moduleData.tetris = (moduleData.tetris || 0) + 1;
+        await api.therapy.updateProgress(user.id, moduleData);
+      } catch (error) {
+        console.error('Failed to save tetris session:', error);
+      }
     }
-    
-    // Dispatch custom event for real-time updates
-    window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
     
     toast.success(`Session complete! Stress reduced by ${stressLevel - stressReduction} points.`);
   };

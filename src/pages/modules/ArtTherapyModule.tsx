@@ -7,8 +7,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface DrawingTool {
@@ -195,7 +194,7 @@ function ArtTherapyModule() {
     }
   };
 
-  const saveArtwork = () => {
+  const saveArtwork = async () => {
     if (canvasRef.current) {
       const dataURL = canvasRef.current.toDataURL();
       const link = document.createElement('a');
@@ -204,28 +203,22 @@ function ArtTherapyModule() {
       link.click();
       
       // Save art therapy session
-      const artSessions = JSON.parse(localStorage.getItem('mindcare_art_sessions') || '[]');
-      const newSession = {
-        id: Date.now().toString(),
-        userId: user?.id,
-        date: new Date().toISOString().split('T')[0],
-        mode: mode,
-        sessionTime: sessionTime,
-        completed: true
-      };
-      artSessions.push(newSession);
-      localStorage.setItem('mindcare_art_sessions', JSON.stringify(artSessions));
-      
-      // Update streak
-      updateStreak();
-      
-      // Update therapy progress
       if (user?.id) {
-        updateTherapyCompletion(user.id, 'art');
+        try {
+          await api.therapy.createSession({
+            userId: user.id,
+            moduleName: 'art',
+            sessionData: { mode, sessionTime, completed: true }
+          });
+          await api.streak.update(user.id);
+          const progress = await api.therapy.getProgress(user.id);
+          const moduleData = progress.moduleData || {};
+          moduleData.art = (moduleData.art || 0) + 1;
+          await api.therapy.updateProgress(user.id, moduleData);
+        } catch (error) {
+          console.error('Failed to save art session:', error);
+        }
       }
-      
-      // Dispatch custom event for real-time updates
-      window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
       
       toast.success('Artwork saved successfully!');
     }

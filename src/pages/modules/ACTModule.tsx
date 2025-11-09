@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Target, Compass, Mountain, Clover as River, Trees as Tree, Star, CheckCircle, Plus, Save, Calendar, Award, Brain, Lightbulb, Eye, Leaf, Sun, Wind, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface Value {
@@ -180,11 +179,19 @@ function ACTModule() {
   ];
 
   useEffect(() => {
-    const saved = localStorage.getItem('mindcare_act_values');
-    if (saved) {
-      setPersonalValues(JSON.parse(saved));
-    }
-  }, []);
+    const loadValues = async () => {
+      if (!user?.id) return;
+      try {
+        const progress = await api.therapy.getProgress(user.id);
+        if (progress.moduleData?.actValues) {
+          setPersonalValues(progress.moduleData.actValues);
+        }
+      } catch (error) {
+        console.error('Failed to load ACT values:', error);
+      }
+    };
+    loadValues();
+  }, [user]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -209,16 +216,31 @@ function ACTModule() {
 
     const updatedValues = [...personalValues, newValue];
     setPersonalValues(updatedValues);
-    localStorage.setItem('mindcare_act_values', JSON.stringify(updatedValues));
+
+    if (user?.id) {
+      api.therapy.getProgress(user.id).then(progress => {
+        const moduleData = progress.moduleData || {};
+        moduleData.actValues = updatedValues;
+        api.therapy.updateProgress(user.id, moduleData);
+      }).catch(console.error);
+    }
+
     toast.success(`${valueName} added to your values!`);
   };
 
   const updateValueImportance = (valueId: string, importance: number) => {
-    const updatedValues = personalValues.map(v => 
+    const updatedValues = personalValues.map(v =>
       v.id === valueId ? { ...v, importance } : v
     );
     setPersonalValues(updatedValues);
-    localStorage.setItem('mindcare_act_values', JSON.stringify(updatedValues));
+
+    if (user?.id) {
+      api.therapy.getProgress(user.id).then(progress => {
+        const moduleData = progress.moduleData || {};
+        moduleData.actValues = updatedValues;
+        api.therapy.updateProgress(user.id, moduleData);
+      }).catch(console.error);
+    }
   };
 
   const startExercise = (exercise: ACTExercise) => {

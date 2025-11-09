@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { trackPayment, trackSessionStart } from '../utils/analyticsManager';
+import { api } from '../services/api';
 
 interface Therapist {
   id: string;

@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BreathingSession {
@@ -151,35 +150,36 @@ function MindfulnessModule() {
     }
   };
 
-  const completeSession = () => {
+  const completeSession = async () => {
     setIsActive(false);
     setCurrentSession(null);
-    
-    // Update streak
-    updateStreak();
-    
-    // Update therapy progress
-    if (user?.id) {
-      updateTherapyCompletion(user.id, 'mindfulness');
-    }
-    
-    // Dispatch custom event for real-time updates
-    window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
-    
+
     // Save mindfulness session completion
-    const mindfulnessSessions = JSON.parse(localStorage.getItem('mindcare_mindfulness_sessions') || '[]');
-    const newSession = {
-      id: Date.now().toString(),
-      userId: user?.id,
-      date: new Date().toISOString().split('T')[0],
-      sessionType: currentSession?.name || 'Breathing Exercise',
-      duration: sessionTime,
-      completed: true
-    };
-    mindfulnessSessions.push(newSession);
-    localStorage.setItem('mindcare_mindfulness_sessions', JSON.stringify(mindfulnessSessions));
-    
-    toast.success('Mindfulness session completed! Well done.');
+    if (user?.id) {
+      try {
+        await api.therapy.createSession({
+          userId: user.id,
+          moduleName: 'mindfulness',
+          sessionData: {
+            sessionType: currentSession?.name || 'Breathing Exercise',
+            duration: sessionTime,
+            completed: true
+          }
+        });
+
+        await api.streak.update(user.id);
+
+        const progress = await api.therapy.getProgress(user.id);
+        const moduleData = progress.moduleData || {};
+        moduleData.mindfulness = (moduleData.mindfulness || 0) + 1;
+        await api.therapy.updateProgress(user.id, moduleData);
+
+        toast.success('Mindfulness session completed! Well done.');
+      } catch (error) {
+        console.error('Failed to save session:', error);
+        toast.error('Session completed but failed to save');
+      }
+    }
   };
 
   const getPhaseInstruction = () => {

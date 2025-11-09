@@ -4,6 +4,7 @@ import { Users, Search, Filter, Plus, Eye, CreditCard as Edit, Trash2, Shield, U
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import { api } from '../services/api';
 
 interface User {
   id: string;
@@ -39,110 +40,38 @@ function UsersPage() {
 
   useEffect(() => {
     loadUsers();
-    
-    // Set up interval to refresh data
-    const interval = setInterval(loadUsers, 5000);
-    
-    // Listen for storage changes to update user data in real-time
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mindcare_demo_users' || e.key === 'mindcare_registered_users' || e.key === 'mindcare_user') {
-        loadUsers();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
+    const interval = setInterval(loadUsers, 10000);
     return () => clearInterval(interval);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
-    };
   }, []);
 
-  const loadUsers = () => {
-    // Load registered users
-    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-    
-    // Load any updated demo user data
-    const updatedDemoUsers = JSON.parse(localStorage.getItem('mindcare_demo_users') || '[]');
-    
-    // Demo users
-    const defaultDemoUsers = [
-      {
-        id: '1',
-        name: 'John Doe',
-        email: 'patient@example.com',
-        role: 'patient' as const,
-        status: 'active' as const,
-        joinDate: '2023-06-15',
-        lastLogin: '2024-01-15',
-        sessionsCount: 24,
-        verified: true,
-        age: 28,
-        emergencyContactEmail: 'emergency@example.com',
-        emergencyContactRelation: 'parent'
-      },
-      {
-        id: '2',
-        name: 'Dr. Sarah Smith',
-        email: 'therapist@example.com',
-        role: 'therapist' as const,
-        status: 'active' as const,
-        joinDate: '2023-03-10',
-        lastLogin: '2024-01-15',
-        patientsCount: 28,
-        verified: true,
-        specialization: 'Cognitive Behavioral Therapy',
-        licenseNumber: 'LIC123456',
-        hourlyRate: 120
-      },
-      {
-        id: '3',
-        name: 'Admin User',
-        email: 'admin@example.com',
-        role: 'admin' as const,
-        status: 'active' as const,
-        joinDate: '2023-01-01',
-        lastLogin: '2024-01-15',
-        verified: true
-      }
-    ];
-    
-    // Merge default demo users with any updates
-    const demoUsers = defaultDemoUsers.map(defaultUser => {
-      const updatedUser = updatedDemoUsers.find((u: any) => u.id === defaultUser.id);
-      return updatedUser ? { ...defaultUser, ...updatedUser } : defaultUser;
-    });
-
-    // Combine demo users with registered users
-    const allUsers = [...demoUsers];
-    
-    registeredUsers.forEach((regUser: any) => {
-      // Don't duplicate demo users
-      if (!demoUsers.some(demo => demo.email === regUser.email)) {
-        const userData: User = {
-          id: regUser.id,
-          name: regUser.name,
-          email: regUser.email,
-          role: regUser.role,
-          status: regUser.status === 'approved' ? 'active' : regUser.status === 'pending' ? 'inactive' : 'active',
-          joinDate: regUser.joinDate || new Date().toISOString().split('T')[0],
-          lastLogin: new Date().toISOString().split('T')[0],
-          verified: regUser.verified || false,
-          ...(regUser.age && { age: regUser.age }),
-          ...(regUser.emergencyContactEmail && { emergencyContactEmail: regUser.emergencyContactEmail }),
-          ...(regUser.emergencyContactRelation && { emergencyContactRelation: regUser.emergencyContactRelation }),
-          ...(regUser.specialization && { specialization: regUser.specialization }),
-          ...(regUser.licenseNumber && { licenseNumber: regUser.licenseNumber }),
-          ...(regUser.hourlyRate && { hourlyRate: regUser.hourlyRate }),
-          ...(regUser.role === 'patient' && { sessionsCount: 0 }),
-          ...(regUser.role === 'therapist' && { patientsCount: 0 })
-        };
-        allUsers.push(userData);
-      }
-    });
-
-    setUsers(allUsers);
+  const loadUsers = async () => {
+    try {
+      const apiUsers = await api.users.getAll();
+      const formattedUsers: User[] = apiUsers.map((u: any) => ({
+        id: u._id || u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        status: u.status || 'active',
+        joinDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        lastLogin: new Date().toISOString().split('T')[0],
+        verified: u.verified || false,
+        age: u.age,
+        emergencyContactEmail: u.emergencyContactEmail,
+        emergencyContactRelation: u.emergencyContactRelation,
+        specialization: u.specialization,
+        licenseNumber: u.licenseNumber,
+        hourlyRate: u.hourlyRate,
+        phone: u.phone,
+        bio: u.bio,
+        sessionsCount: u.role === 'patient' ? 0 : undefined,
+        patientsCount: u.role === 'therapist' ? 0 : undefined
+      }));
+      setUsers(formattedUsers);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      setUsers([]);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -163,56 +92,23 @@ function UsersPage() {
     }
   };
 
-  const handleUserAction = (userId: string, action: string) => {
-    if (action === 'suspended' || action === 'activated') {
-      const newStatus = action === 'suspended' ? 'suspended' : 'active';
-      
-      // Update local state
-      setUsers(prev => prev.map(u => 
-        u.id === userId ? { ...u, status: newStatus as any } : u
-      ));
-      
-      // Update registered users in localStorage
-      const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-      const updatedUsers = registeredUsers.map((u: any) => 
-        u.id === userId ? { ...u, status: newStatus } : u
-      );
-      localStorage.setItem('mindcare_registered_users', JSON.stringify(updatedUsers));
-      
-      // Update therapist services status
-      const therapistServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-      const updatedServices = therapistServices.map((s: any) => 
-        s.therapistId === userId ? { ...s, status: newStatus === 'suspended' ? 'suspended' : 'approved' } : s
-      );
-      localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-      
-      // Update available therapists for booking
-      if (newStatus === 'suspended') {
-        const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
-        const updatedAvailableTherapists = availableTherapists.filter((t: any) => t.id !== userId);
-        localStorage.setItem('mindcare_therapists', JSON.stringify(updatedAvailableTherapists));
+  const handleUserAction = async (userId: string, action: string) => {
+    try {
+      if (action === 'suspended' || action === 'activated') {
+        const newStatus = action === 'suspended' ? 'suspended' : 'active';
+        await api.users.update(userId, { status: newStatus });
+        setUsers(prev => prev.map(u =>
+          u.id === userId ? { ...u, status: newStatus as any } : u
+        ));
+      } else if (action === 'deleted') {
+        await api.users.delete(userId);
+        setUsers(prev => prev.filter(u => u.id !== userId));
       }
-    } else if (action === 'deleted') {
-      // Remove from local state
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      
-      // Remove from registered users
-      const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-      const updatedUsers = registeredUsers.filter((u: any) => u.id !== userId);
-      localStorage.setItem('mindcare_registered_users', JSON.stringify(updatedUsers));
-      
-      // Remove therapist services
-      const therapistServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-      const updatedServices = therapistServices.filter((s: any) => s.therapistId !== userId);
-      localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-      
-      // Remove from available therapists for booking
-      const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
-      const updatedAvailableTherapists = availableTherapists.filter((t: any) => t.id !== userId);
-      localStorage.setItem('mindcare_therapists', JSON.stringify(updatedAvailableTherapists));
+      toast.success(`User ${action} successfully`);
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      toast.error('Failed to update user');
     }
-    
-    toast.success(`User ${action} successfully`);
   };
 
   const filteredUsers = users.filter(user => {

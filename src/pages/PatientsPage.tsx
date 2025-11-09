@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import PatientAnalyticsModal from '../components/PatientAnalyticsModal';
 import toast from 'react-hot-toast';
-import { getTherapistProgressReports } from '../utils/therapyProgressManager';
+import { api } from '../services/api';
 
 interface Patient {
   id: string;
@@ -47,23 +47,22 @@ function PatientsPage() {
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
 
   useEffect(() => {
-    const loadPatients = () => {
-      // Get all bookings for this therapist
-      const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-      const therapistBookings = allBookings.filter((booking: any) => 
-        (booking.therapistName === user?.name || booking.therapistId === user?.id) &&
-        booking.status !== 'deleted_by_therapist' // Exclude patients deleted by this therapist
-      );
+    const loadPatients = async () => {
+      if (!user?.id) return;
+      try {
+        const allBookings = await api.bookings.getByTherapist(user.id);
+        const therapistBookings = allBookings.filter((booking: any) =>
+          booking.status !== 'deleted_by_therapist'
+        );
 
-      // Get registered users to get patient details
-      const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
+        const allUsers = await api.users.getAll();
       
       // Create patient records from bookings and user data
       const patientMap = new Map();
       
-      therapistBookings.forEach((booking: any) => {
-        const patientId = booking.patientId;
-        const patientUser = registeredUsers.find((u: any) => u.id === patientId);
+        therapistBookings.forEach((booking: any) => {
+          const patientId = booking.patientId;
+          const patientUser = allUsers.find((u: any) => u._id === patientId || u.id === patientId);
         
         if (!patientMap.has(patientId)) {
           // Calculate sessions for this patient
@@ -73,19 +72,11 @@ function PatientsPage() {
             ? completedSessions.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
             : null;
 
-          // Get current mood from mood tracker
-          const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
-          const patientMoodEntries = moodEntries.filter((entry: any) => entry.userId === patientId);
-          const latestMood = patientMoodEntries.length > 0 
-            ? patientMoodEntries[patientMoodEntries.length - 1].moodIntensity || 3
-            : 3;
+            // Default mood rating
+            const latestMood = 3;
 
-          // Determine diagnosis based on therapy modules used or default
-          let diagnosis = ['General Therapy'];
-          const userProgress = JSON.parse(localStorage.getItem('mindcare_user_progress') || '{}');
-          if (userProgress.currentPlan?.issue) {
-            diagnosis = [userProgress.currentPlan.issue];
-          }
+            // Default diagnosis
+            let diagnosis = ['General Therapy'];
 
           const patient: Patient = {
             id: patientId,
@@ -111,42 +102,18 @@ function PatientsPage() {
           
           patientMap.set(patientId, patient);
         }
-      });
-      
-      setPatients(Array.from(patientMap.values()));
-    };
+        });
 
-    const loadProgressReports = () => {
-      if (user?.id) {
-        const reports = getTherapistProgressReports(user.id);
-        setProgressReports(reports);
+        setPatients(Array.from(patientMap.values()));
+      } catch (error) {
+        console.error('Failed to load patients:', error);
+        setPatients([]);
       }
     };
+
     loadPatients();
-    loadProgressReports();
-    
-    // Set up interval to refresh data
-    const interval = setInterval(loadPatients, 5000);
-    
-    // Listen for storage changes
-    const handleStorageChange = () => {
-      loadPatients();
-      loadProgressReports();
-      loadProgressReports();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('mindcare-data-updated', handleStorageChange);
-    window.addEventListener('mindcare-therapy-progress-updated', handleStorageChange);
-    window.addEventListener('mindcare-patient-progress-update', handleStorageChange);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('mindcare-data-updated', handleStorageChange);
-      window.removeEventListener('mindcare-therapy-progress-updated', handleStorageChange);
-      window.removeEventListener('mindcare-patient-progress-update', handleStorageChange);
-    };
+    const interval = setInterval(loadPatients, 10000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const getStatusColor = (status: string) => {

@@ -5,10 +5,7 @@ import toast from 'react-hot-toast';
 import { Users, UserCheck, Shield, BarChart3, AlertTriangle, TrendingUp, DollarSign, Clock, CheckCircle, XCircle, Eye, CreditCard as Edit, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { 
-  getAnalytics, updateAnalyticsFromCurrentData, trackTherapistApproval,
-  getRecentActivity, generateTimeSeriesData
-} from '../utils/analyticsManager';
+import { api } from '../services/api';
 
 function AdminDashboard() {
   const { user } = useAuth();
@@ -22,21 +19,50 @@ function AdminDashboard() {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load initial analytics data
-    const initialAnalytics = updateAnalyticsFromCurrentData();
-    setAnalytics(initialAnalytics);
-    
-    // Load recent activity
-    setRecentActivity(getRecentActivity());
-    
-    // Load pending services from localStorage
-    const loadPendingServices = () => {
-      const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-      const pending = services.filter((service: any) => service.status === 'pending');
-      setPendingServices(pending);
+    const loadDashboardData = async () => {
+      try {
+        // Load pending services
+        const services = await api.therapistService.getAll();
+        const pending = services.filter((service: any) => service.status === 'pending');
+        setPendingServices(pending);
+
+        // Load analytics
+        const users = await api.users.getAll();
+        const bookings = await api.bookings.getAll();
+        const therapistServices = services.filter((s: any) => s.status === 'approved');
+
+        const analyticsData = {
+          totalUsers: users.length,
+          totalTherapists: therapistServices.length,
+          totalPatients: users.filter((u: any) => u.role === 'patient').length,
+          totalSessions: bookings.filter((b: any) => b.status === 'completed').length,
+          pendingApprovals: pending.length,
+          activeUsers: users.filter((u: any) => u.status === 'active').length,
+          revenue: bookings
+            .filter((b: any) => b.status === 'completed')
+            .reduce((sum: number, b: any) => {
+              const amount = typeof b.amount === 'string' ? parseInt(b.amount.replace(/[^0-9]/g, '')) : b.amount;
+              return sum + (amount || 0);
+            }, 0)
+        };
+        setAnalytics(analyticsData);
+
+        // Set recent activity from bookings
+        const recentBookings = bookings
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 10)
+          .map((booking: any) => ({
+            type: 'booking',
+            description: `${booking.patientName} booked with ${booking.therapistName}`,
+            timestamp: booking.createdAt
+          }));
+        setRecentActivity(recentBookings);
+      } catch (error) {
+        console.error('Failed to load admin dashboard data:', error);
+      }
     };
-    
-    loadPendingServices();
+
+    loadDashboardData();
     
     // Set up interval to refresh data
     const interval = setInterval(() => {
@@ -111,95 +137,37 @@ function AdminDashboard() {
     }
   };
 
-  const handleApproveTherapist = (id: string) => {
-    const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-    
-    const serviceToApprove = services.find((s: any) => s.id === id);
-    if (serviceToApprove) {
-      // Update service status
-      const updatedServices = services.map((s: any) => 
-        s.id === id ? { ...s, status: 'approved', approvedAt: new Date().toISOString() } : s
-      );
-      localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-      
-      // Update the therapist's status in registered users
-      const updatedUsers = registeredUsers.map((u: any) => 
-        u.id === serviceToApprove.therapistId ? { ...u, status: 'approved', verified: true } : u
-      );
-      localStorage.setItem('mindcare_registered_users', JSON.stringify(updatedUsers));
-      
-      // Add to available therapists for booking
-      const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
-      
-      // Get the therapist user data for complete profile
-      const therapistUser = registeredUsers.find((u: any) => u.id === serviceToApprove.therapistId);
-      
-      const therapistForBooking = {
-        id: serviceToApprove.therapistId,
-        name: serviceToApprove.therapistName,
-        title: serviceToApprove.qualification,
-        specialization: serviceToApprove.specialization,
-        experience: therapistUser?.experience ? parseInt(therapistUser.experience.split(' ')[0]) || 0 : parseInt(serviceToApprove.experience.split(' ')[0]) || 0,
-        rating: 4.8,
-        reviewCount: 0,
-        hourlyRate: therapistUser?.hourlyRate || serviceToApprove.chargesPerSession,
-        location: 'Online',
-        avatar: serviceToApprove.profilePicture && serviceToApprove.profilePicture.trim() !== '' 
-          ? serviceToApprove.profilePicture 
-          : 'https://images.pexels.com/photos/5327580/pexels-photo-5327580.jpeg?auto=compress&cs=tinysrgb&w=150',
-        verified: true,
-        nextAvailable: 'Today, 2:00 PM',
-        bio: therapistUser?.bio || serviceToApprove.bio,
-        languages: serviceToApprove.languages
-      };
-      
-      const updatedAvailableTherapists = availableTherapists.filter((t: any) => t.id !== serviceToApprove.therapistId);
-      updatedAvailableTherapists.push(therapistForBooking);
-      localStorage.setItem('mindcare_therapists', JSON.stringify(updatedAvailableTherapists));
-      
-      // Track the approval in analytics
-      trackTherapistApproval(serviceToApprove);
-      
-      // Refresh pending services to remove the approved one
-      setPendingServices(prev => prev.filter(s => s.id !== id));
-      
-      toast.success(`${serviceToApprove.therapistName}'s service has been approved!`);
-      
-      // Trigger a refresh of the therapists page data if it's loaded
-      window.dispatchEvent(new CustomEvent('mindcare-therapist-approved', { detail: { therapistId: serviceToApprove.therapistId } }));
+  const handleApproveTherapist = async (id: string) => {
+    try {
+      await api.therapistService.update(id, {
+        status: 'approved',
+        approvedAt: new Date().toISOString()
+      });
+
+      // Reload pending services
+      const services = await api.therapistService.getAll();
+      const pending = services.filter((service: any) => service.status === 'pending');
+      setPendingServices(pending);
+
+    } catch (error) {
+      console.error('Failed to approve therapist:', error);
+      toast.error('Failed to approve therapist');
     }
   };
 
-  const handleRejectTherapist = (id: string) => {
-    const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-    
-    const serviceToReject = services.find((s: any) => s.id === id);
-    if (serviceToReject) {
-      // Update service status
-      const updatedServices = services.map((s: any) => 
-        s.id === id ? { ...s, status: 'rejected' } : s
-      );
-      localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-      
-      // Update the therapist's status in registered users
-      const updatedUsers = registeredUsers.map((u: any) => 
-        u.id === serviceToReject.therapistId ? { ...u, status: 'rejected' } : u
-      );
-      localStorage.setItem('mindcare_registered_users', JSON.stringify(updatedUsers));
-      
-      // Remove from available therapists for booking if they were there
-      const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
-      const updatedAvailableTherapists = availableTherapists.filter((t: any) => t.id !== serviceToReject.therapistId);
-      localStorage.setItem('mindcare_therapists', JSON.stringify(updatedAvailableTherapists));
+  const handleRejectTherapist = async (id: string) => {
+    try {
+      await api.therapistService.update(id, { status: 'rejected' });
+
+      // Reload pending services
+      const services = await api.therapistService.getAll();
+      const pending = services.filter((service: any) => service.status === 'pending');
+      setPendingServices(pending);
+
+    } catch (error) {
+      console.error('Failed to reject therapist:', error);
+      toast.error('Failed to reject therapist');
     }
-    
-    setPendingServices(prev => prev.filter(s => s.id !== id));
-    toast.success(`${serviceToReject?.therapistName || 'Therapist'}'s service has been rejected.`);
-    
-    // Trigger a refresh of the therapists page data if it's loaded
-    window.dispatchEvent(new CustomEvent('mindcare-therapist-rejected', { detail: { therapistId: serviceToReject?.therapistId } }));
   };
 
   const getIconComponent = (iconName: string) => {

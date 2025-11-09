@@ -21,12 +21,15 @@ function AdminDashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // TEST MODE: Use mock data
-        const services = [
+        // Load services from localStorage (where therapists submit them)
+        const storedServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
+
+        // Add default mock services if none exist
+        const defaultServices = [
           {
             id: 'pending-service-1',
             therapistId: 'new-therapist-1',
-            therapistName: 'Dr. Michael Johnson',
+            therapistName: 'Michael Johnson',
             qualification: 'PhD in Clinical Psychology',
             specialization: ['Anxiety', 'Depression', 'CBT'],
             experience: '10 years',
@@ -37,26 +40,18 @@ function AdminDashboard() {
           {
             id: 'pending-service-2',
             therapistId: 'new-therapist-2',
-            therapistName: 'Dr. Emily Chen',
+            therapistName: 'Emily Chen',
             qualification: 'Licensed Therapist',
             specialization: ['Family Therapy', 'Trauma', 'PTSD'],
             experience: '7 years',
             chargesPerSession: 130,
             status: 'pending',
             submittedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            id: 'approved-service-1',
-            therapistId: 'test-therapist-456',
-            therapistName: 'Dr. Sarah Smith',
-            qualification: 'Licensed Clinical Psychologist',
-            specialization: ['CBT', 'Anxiety'],
-            experience: '8 years',
-            chargesPerSession: 120,
-            status: 'approved',
-            submittedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
           }
         ];
+
+        // Combine stored services with default ones (if stored services is empty)
+        const services = storedServices.length > 0 ? storedServices : defaultServices;
 
         const pending = services.filter((service: any) => service.status === 'pending');
         setPendingServices(pending);
@@ -160,16 +155,34 @@ function AdminDashboard() {
   };
 
   const handleApproveTherapist = async (id: string) => {
-    // TEST MODE: Update local state
-    const updatedServices = pendingServices.filter((service: any) => service.id !== id);
-    setPendingServices(updatedServices);
+    // Update service status in localStorage
+    const allServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
+    const updatedServices = allServices.map((service: any) =>
+      service.id === id
+        ? { ...service, status: 'approved', approvedAt: new Date().toISOString() }
+        : service
+    );
+    localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
+
+    // Update local state
+    const pending = updatedServices.filter((service: any) => service.status === 'pending');
+    setPendingServices(pending);
     toast.success('Therapist approved successfully!');
   };
 
   const handleRejectTherapist = async (id: string) => {
-    // TEST MODE: Update local state
-    const updatedServices = pendingServices.filter((service: any) => service.id !== id);
-    setPendingServices(updatedServices);
+    // Update service status in localStorage
+    const allServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
+    const updatedServices = allServices.map((service: any) =>
+      service.id === id
+        ? { ...service, status: 'rejected', rejectedAt: new Date().toISOString() }
+        : service
+    );
+    localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
+
+    // Update local state
+    const pending = updatedServices.filter((service: any) => service.status === 'pending');
+    setPendingServices(pending);
     toast.success('Therapist rejected successfully!');
   };
 

@@ -6,7 +6,7 @@ export interface MockUser {
   email: string;
   name: string;
   role: 'patient' | 'therapist' | 'admin';
-  status?: 'pending' | 'approved' | 'rejected' | 'active';
+  status?: 'pending' | 'approved' | 'rejected' | 'active' | 'inactive' | 'suspended';
   profilePicture?: string;
   age?: number;
   emergencyContactEmail?: string;
@@ -19,6 +19,8 @@ export interface MockUser {
   bio?: string;
   verified?: boolean;
   createdAt?: string;
+  joinDate?: string;
+  lastLogin?: string;
 }
 
 export interface MockTherapistService {
@@ -110,7 +112,9 @@ class MockDataService {
           emergencyContactRelation: 'parent',
           verified: true,
           status: 'active',
-          createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+          createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          joinDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          lastLogin: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         },
         {
           id: 'test-therapist-456',
@@ -125,7 +129,9 @@ class MockDataService {
           bio: 'Experienced therapist specializing in CBT with a passion for helping patients overcome anxiety and depression.',
           verified: true,
           status: 'active',
-          createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString()
+          createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+          joinDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          lastLogin: new Date().toISOString().split('T')[0]
         },
         {
           id: 'test-admin-789',
@@ -134,7 +140,9 @@ class MockDataService {
           role: 'admin',
           verified: true,
           status: 'active',
-          createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+          createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+          joinDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          lastLogin: new Date().toISOString().split('T')[0]
         }
       ];
       localStorage.setItem(this.storageKey.users, JSON.stringify(defaultUsers));
@@ -230,6 +238,22 @@ class MockDataService {
   // Users
   getAllUsers(): MockUser[] {
     return JSON.parse(localStorage.getItem(this.storageKey.users) || '[]');
+  }
+
+  updateUser(id: string, updates: Partial<MockUser>): void {
+    const users = this.getAllUsers();
+    const updatedUsers = users.map(u =>
+      u.id === id ? { ...u, ...updates } : u
+    );
+    localStorage.setItem(this.storageKey.users, JSON.stringify(updatedUsers));
+    this.emit();
+  }
+
+  deleteUser(id: string): void {
+    const users = this.getAllUsers();
+    const filteredUsers = users.filter(u => u.id !== id);
+    localStorage.setItem(this.storageKey.users, JSON.stringify(filteredUsers));
+    this.emit();
   }
 
   // Therapist Services

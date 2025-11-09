@@ -4,7 +4,7 @@ import { Users, Search, Filter, Plus, Eye, CreditCard as Edit, Trash2, Shield, U
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 interface User {
   id: string;
@@ -46,27 +46,36 @@ function UsersPage() {
 
   const loadUsers = async () => {
     try {
-      const apiUsers = await api.users.getAll();
-      const formattedUsers: User[] = apiUsers.map((u: any) => ({
-        id: u._id || u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.status || 'active',
-        joinDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        lastLogin: new Date().toISOString().split('T')[0],
-        verified: u.verified || false,
-        age: u.age,
-        emergencyContactEmail: u.emergencyContactEmail,
-        emergencyContactRelation: u.emergencyContactRelation,
-        specialization: u.specialization,
-        licenseNumber: u.licenseNumber,
-        hourlyRate: u.hourlyRate,
-        phone: u.phone,
-        bio: u.bio,
-        sessionsCount: u.role === 'patient' ? 0 : undefined,
-        patientsCount: u.role === 'therapist' ? 0 : undefined
-      }));
+      const mockUsers = mockDataService.getAllUsers();
+      const allBookings = mockDataService.getAllBookings();
+
+      const formattedUsers: User[] = mockUsers.map((u: any) => {
+        const userBookings = allBookings.filter((b: any) =>
+          u.role === 'patient' ? b.patientId === u.id : b.therapistId === u.id
+        );
+
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          status: u.status || 'active',
+          joinDate: u.joinDate || new Date().toISOString().split('T')[0],
+          lastLogin: u.lastLogin || new Date().toISOString().split('T')[0],
+          verified: u.verified !== undefined ? u.verified : true,
+          age: u.age,
+          emergencyContactEmail: u.emergencyContactEmail,
+          emergencyContactRelation: u.emergencyContactRelation,
+          specialization: u.specialization,
+          licenseNumber: u.licenseNumber,
+          hourlyRate: u.hourlyRate,
+          phone: u.phone,
+          bio: u.bio,
+          sessionsCount: u.role === 'patient' ? userBookings.length : undefined,
+          patientsCount: u.role === 'therapist' ? new Set(userBookings.map((b: any) => b.patientId)).size : undefined
+        };
+      });
+
       setUsers(formattedUsers);
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -96,15 +105,16 @@ function UsersPage() {
     try {
       if (action === 'suspended' || action === 'activated') {
         const newStatus = action === 'suspended' ? 'suspended' : 'active';
-        await api.users.update(userId, { status: newStatus });
+        mockDataService.updateUser(userId, { status: newStatus });
         setUsers(prev => prev.map(u =>
           u.id === userId ? { ...u, status: newStatus as any } : u
         ));
       } else if (action === 'deleted') {
-        await api.users.delete(userId);
+        mockDataService.deleteUser(userId);
         setUsers(prev => prev.filter(u => u.id !== userId));
       }
       toast.success(`User ${action} successfully`);
+      loadUsers();
     } catch (error) {
       console.error('Failed to update user:', error);
       toast.error('Failed to update user');

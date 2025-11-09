@@ -4,6 +4,7 @@ import { User, Camera, Save, CreditCard as Edit, CheckCircle, Clock, DollarSign,
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import { mockDataService } from '../services/mockDataService';
 import { trackTherapistRegistration } from '../utils/analyticsManager';
 
 interface TherapistService {
@@ -72,25 +73,33 @@ function ListServicePage() {
   ];
 
   useEffect(() => {
-    // Load existing service if any
-    const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const userService = services.find((service: TherapistService) => service.therapistId === user?.id);
-    
-    if (userService) {
-      setExistingService(userService);
-      setServiceData(userService);
-    } else {
-      // Pre-populate with user profile data
-      setServiceData(prev => ({
-        ...prev,
-        therapistId: user?.id || '',
-        therapistName: user?.name || '',
-        experience: user?.experience || '',
-        chargesPerSession: user?.hourlyRate || 100,
-        specialization: user?.specialization ? [user.specialization] : [],
-        bio: user?.bio || ''
-      }));
-    }
+    const loadData = () => {
+      // Load existing service from mock service
+      const services = mockDataService.getAllServices();
+      const userService = services.find((service: TherapistService) => service.therapistId === user?.id);
+
+      if (userService) {
+        setExistingService(userService);
+        setServiceData(userService);
+      } else {
+        // Pre-populate with user profile data
+        setServiceData(prev => ({
+          ...prev,
+          therapistId: user?.id || '',
+          therapistName: user?.name || '',
+          experience: user?.experience || '',
+          chargesPerSession: user?.hourlyRate || 100,
+          specialization: user?.specialization ? [user.specialization] : [],
+          bio: user?.bio || ''
+        }));
+      }
+    };
+
+    loadData();
+
+    // Listen for updates
+    const unsubscribe = mockDataService.onUpdate(loadData);
+    return unsubscribe;
   }, [user]);
 
   const handleInputChange = (field: string, value: any) => {
@@ -130,32 +139,24 @@ function ListServicePage() {
     };
 
     try {
-      // Save to therapist services for admin approval
-      const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-      const updatedServices = existingService 
-        ? services.map((s: TherapistService) => s.id === existingService.id ? newService : s)
-        : [...services, newService];
-      
-      localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
+      // Save using mock service
+      if (existingService) {
+        mockDataService.updateService(existingService.id, newService);
+      } else {
+        mockDataService.addService(newService);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        // If quota exceeded, save without profile picture
-        const serviceWithoutPhoto = { ...newService, profilePicture: '' };
-        const services = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-        const updatedServices = existingService 
-          ? services.map((s: TherapistService) => s.id === existingService.id ? serviceWithoutPhoto : s)
-          : [...services, serviceWithoutPhoto];
-        
-        localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-        toast.error('Profile photo too large. Service saved without photo.');
+        toast.error('Profile photo too large. Please use a smaller image.');
         return;
       }
-      throw error;
+      toast.error('Failed to save service');
+      return;
     }
-    
+
     setExistingService(newService);
     setIsEditing(false);
-    
+
     // Track therapist service submission for analytics
     if (!existingService) {
       trackTherapistRegistration({
@@ -164,7 +165,7 @@ function ListServicePage() {
         specialization: newService.specialization
       });
     }
-    
+
     toast.success(existingService ? 'Service updated! Awaiting admin approval.' : 'Service submitted! Awaiting admin approval.');
   };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   Calendar, Clock, Video, Star, MapPin, DollarSign,
   User, Phone, Mail, Award, CheckCircle, Filter,
   Search, Heart, Brain, Users, Target, Plus,
@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 interface Therapist {
   id: string;
@@ -127,27 +127,21 @@ function BookingPage() {
   ];
 
   useEffect(() => {
-    // Load approved therapist services
-    const therapistServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const approvedServices = therapistServices.filter((service: any) => service.status === 'approved');
-    
-    // Also check if the therapist user still exists and is active
-    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-    const activeApprovedServices = approvedServices.filter((service: any) => {
-      const therapistUser = registeredUsers.find((u: any) => u.id === service.therapistId);
-      return therapistUser && therapistUser.status !== 'deleted' && therapistUser.status !== 'suspended';
-    });
-    
-    // Convert services to therapist format for booking
-    const availableTherapistsFromServices = activeApprovedServices.map((service: any) => {
-      const therapistUser = registeredUsers.find((u: any) => u.id === service.therapistId);
-      return {
-        id: service.therapistId,
-        name: service.therapistName,
-        title: service.qualification,
-        specialization: service.specialization,
-        experience: parseInt(service.experience.split(' ')[0]) || 0,
-        rating: 4.8, // Default rating for new therapists
+    const loadData = () => {
+      // Load approved therapist services from mock service
+      const approvedServices = mockDataService.getApprovedServices();
+      const users = mockDataService.getAllUsers();
+
+      // Convert services to therapist format for booking
+      const availableTherapistsFromServices = approvedServices.map((service: any) => {
+        const therapistUser = users.find((u: any) => u.id === service.therapistId);
+        return {
+          id: service.therapistId,
+          name: service.therapistName,
+          title: service.qualification,
+          specialization: service.specialization,
+          experience: parseInt(service.experience.split(' ')[0]) || 0,
+          rating: 4.8, // Default rating for new therapists
         reviewCount: 0,
         hourlyRate: service.chargesPerSession,
         location: 'Online',
@@ -160,49 +154,29 @@ function BookingPage() {
         languages: service.languages,
         availability: service.availability || []
       };
-    });
+      });
 
-    // Load existing therapists from localStorage and merge with services
-    const existingTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
-    
-    // Filter out deleted/suspended therapists from existing list
-    const activeExistingTherapists = existingTherapists.filter((therapist: any) => {
-      const therapistUser = registeredUsers.find((u: any) => u.id === therapist.id);
-      return !therapistUser || (therapistUser.status !== 'deleted' && therapistUser.status !== 'suspended');
-    });
-    
-    // Combine and deduplicate
-    const allTherapists = [...activeExistingTherapists];
-    availableTherapistsFromServices.forEach((serviceTherapist: any) => {
-      const existingIndex = allTherapists.findIndex((t: any) => t.id === serviceTherapist.id);
-      if (existingIndex >= 0) {
-        // Update existing therapist with service data
-        allTherapists[existingIndex] = serviceTherapist;
-      } else {
-        // Add new therapist
-        allTherapists.push(serviceTherapist);
-      }
-    });
+      // Combine with default therapists
+      const allTherapists = availableTherapistsFromServices.length > 0
+        ? availableTherapistsFromServices
+        : defaultTherapists;
 
-    if (allTherapists.length > 0) {
       setAvailableTherapists(allTherapists);
-      localStorage.setItem('mindcare_therapists', JSON.stringify(allTherapists));
-    } else {
-      // Initialize with default therapists if none exist
-      localStorage.setItem('mindcare_therapists', JSON.stringify(defaultTherapists));
-      setAvailableTherapists(defaultTherapists);
-    }
 
-    // Load user appointments
-    loadUserAppointments();
+      // Load user appointments
+      loadUserAppointments();
+    };
+
+    loadData();
+
+    // Listen for updates when therapists are approved
+    const unsubscribe = mockDataService.onUpdate(loadData);
+    return unsubscribe;
   }, [user]);
 
   const loadUserAppointments = () => {
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const userBookings = allBookings.filter((booking: Appointment) => 
-      booking.patientId === user?.id
-    );
-    setUserAppointments(userBookings);
+    const userBookings = mockDataService.getBookingsByPatient(user?.id || '');
+    setUserAppointments(userBookings as Appointment[]);
   };
 
   // Generate time slots based on therapist availability
@@ -384,18 +358,11 @@ function BookingPage() {
       amount: `₹${selectedTherapist.hourlyRate}`,
       status: 'confirmed',
       sessionType: 'video',
-      patientEmail: user?.email || '',
-      createdAt: new Date().toISOString(),
-      displayTime: displayTime
+      createdAt: new Date().toISOString()
     };
 
-    // Save confirmed booking to localStorage
-    const existingBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    existingBookings.push(booking);
-    localStorage.setItem('mindcare_bookings', JSON.stringify(existingBookings));
-
-    // Dispatch custom event for same-tab updates
-    window.dispatchEvent(new Event('mindcare-data-updated'));
+    // Save confirmed booking using mock service
+    mockDataService.addBooking(booking);
 
     // Track session booking and payment
     trackSessionStart(booking);

@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { Users, UserCheck, Shield, BarChart3, AlertTriangle, TrendingUp, DollarSign, Clock, CheckCircle, XCircle, Eye, CreditCard as Edit, Trash2, Search, Filter, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 function AdminDashboard() {
   const { user } = useAuth();
@@ -19,56 +19,17 @@ function AdminDashboard() {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadDashboardData = async () => {
+    const loadDashboardData = () => {
       try {
-        // Load services from localStorage (where therapists submit them)
-        const storedServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
+        // Load data from mock service
+        const services = mockDataService.getAllServices();
+        const users = mockDataService.getAllUsers();
+        const bookings = mockDataService.getAllBookings();
 
-        // Add default mock services if none exist
-        const defaultServices = [
-          {
-            id: 'pending-service-1',
-            therapistId: 'new-therapist-1',
-            therapistName: 'Michael Johnson',
-            qualification: 'PhD in Clinical Psychology',
-            specialization: ['Anxiety', 'Depression', 'CBT'],
-            experience: '10 years',
-            chargesPerSession: 150,
-            status: 'pending',
-            submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            id: 'pending-service-2',
-            therapistId: 'new-therapist-2',
-            therapistName: 'Emily Chen',
-            qualification: 'Licensed Therapist',
-            specialization: ['Family Therapy', 'Trauma', 'PTSD'],
-            experience: '7 years',
-            chargesPerSession: 130,
-            status: 'pending',
-            submittedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-          }
-        ];
-
-        // Combine stored services with default ones (if stored services is empty)
-        const services = storedServices.length > 0 ? storedServices : defaultServices;
-
-        const pending = services.filter((service: any) => service.status === 'pending');
+        const pending = mockDataService.getPendingServices();
         setPendingServices(pending);
 
-        // Mock users and bookings
-        const users = [
-          { id: 'test-patient-123', name: 'John Doe', role: 'patient', status: 'active' },
-          { id: 'test-therapist-456', name: 'Dr. Sarah Smith', role: 'therapist', status: 'active' },
-          { id: 'test-admin-789', name: 'Admin User', role: 'admin', status: 'active' }
-        ];
-
-        const bookings = [
-          { id: '1', patientName: 'John Doe', therapistName: 'Dr. Sarah Smith', status: 'completed', amount: '120', createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: '2', patientName: 'John Doe', therapistName: 'Dr. Sarah Smith', status: 'completed', amount: '120', createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() }
-        ];
-
-        const therapistServices = services.filter((s: any) => s.status === 'approved');
+        const therapistServices = mockDataService.getApprovedServices();
 
         const analyticsData = {
           totalUsers: users.length,
@@ -102,6 +63,10 @@ function AdminDashboard() {
     };
 
     loadDashboardData();
+
+    // Listen for updates
+    const unsubscribe = mockDataService.onUpdate(loadDashboardData);
+    return unsubscribe;
   }, []);
 
   const stats = analytics ? [
@@ -155,34 +120,12 @@ function AdminDashboard() {
   };
 
   const handleApproveTherapist = async (id: string) => {
-    // Update service status in localStorage
-    const allServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const updatedServices = allServices.map((service: any) =>
-      service.id === id
-        ? { ...service, status: 'approved', approvedAt: new Date().toISOString() }
-        : service
-    );
-    localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-
-    // Update local state
-    const pending = updatedServices.filter((service: any) => service.status === 'pending');
-    setPendingServices(pending);
+    mockDataService.approveService(id);
     toast.success('Therapist approved successfully!');
   };
 
   const handleRejectTherapist = async (id: string) => {
-    // Update service status in localStorage
-    const allServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const updatedServices = allServices.map((service: any) =>
-      service.id === id
-        ? { ...service, status: 'rejected', rejectedAt: new Date().toISOString() }
-        : service
-    );
-    localStorage.setItem('mindcare_therapist_services', JSON.stringify(updatedServices));
-
-    // Update local state
-    const pending = updatedServices.filter((service: any) => service.status === 'pending');
-    setPendingServices(pending);
+    mockDataService.rejectService(id);
     toast.success('Therapist rejected successfully!');
   };
 

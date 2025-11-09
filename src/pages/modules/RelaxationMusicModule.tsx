@@ -11,6 +11,8 @@ import toast from 'react-hot-toast';
 import { updateStreak } from '../../utils/streakManager';
 import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAllTherapies } from '../../utils/therapyStorage';
+import { getTherapyContent } from '../../utils/therapyContentStorage';
 
 interface Track {
   id: string;
@@ -46,125 +48,15 @@ function RelaxationMusicModule() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>('nature');
   const [visualizationStyle, setVisualizationStyle] = useState<'waveform' | 'particles' | 'orb'>('orb');
   const [audioData, setAudioData] = useState<number[]>(Array(64).fill(0));
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const playlists: Playlist[] = [
-    {
-      id: 'nature',
-      name: 'Nature Sounds',
-      description: 'Calming sounds from the natural world',
-      icon: Leaf,
-      color: 'from-green-500 to-teal-500',
-      tracks: [
-        {
-          id: '1',
-          title: 'Forest Rain',
-          artist: 'Nature Collective',
-          duration: 600,
-          category: 'nature',
-          description: 'Gentle rainfall in a peaceful forest setting',
-          benefits: ['Reduces anxiety', 'Improves focus', 'Promotes sleep'],
-          url: '/audio/forest-rain.mp3'
-        },
-        {
-          id: '2',
-          title: 'Ocean Waves',
-          artist: 'Coastal Sounds',
-          duration: 720,
-          category: 'nature',
-          description: 'Rhythmic ocean waves on a quiet beach',
-          benefits: ['Stress relief', 'Meditation aid', 'Deep relaxation'],
-          url: '/audio/ocean-waves.mp3'
-        }
-      ]
-    },
-    {
-      id: 'meditation',
-      name: 'Meditation Music',
-      description: 'Ambient music designed for mindfulness practice',
-      icon: Heart,
-      color: 'from-purple-500 to-pink-500',
-      tracks: [
-        {
-          id: '3',
-          title: 'Tibetan Bowls',
-          artist: 'Meditation Masters',
-          duration: 900,
-          category: 'meditation',
-          description: 'Traditional singing bowls for deep meditation',
-          benefits: ['Chakra balancing', 'Deep meditation', 'Spiritual connection'],
-          url: '/audio/tibetan-bowls.mp3'
-        },
-        {
-          id: '4',
-          title: 'Ambient Harmony',
-          artist: 'Zen Collective',
-          duration: 1200,
-          category: 'meditation',
-          description: 'Ethereal ambient tones for mindfulness',
-          benefits: ['Mental clarity', 'Emotional balance', 'Inner peace'],
-          url: '/audio/ambient-harmony.mp3'
-        }
-      ]
-    },
-    {
-      id: 'sleep',
-      name: 'Sleep Sounds',
-      description: 'Soothing audio to help you fall asleep',
-      icon: Moon,
-      color: 'from-blue-500 to-indigo-500',
-      tracks: [
-        {
-          id: '5',
-          title: 'White Noise',
-          artist: 'Sleep Institute',
-          duration: 3600,
-          category: 'sleep',
-          description: 'Consistent white noise for better sleep',
-          benefits: ['Blocks distractions', 'Improves sleep quality', 'Reduces insomnia'],
-          url: '/audio/white-noise.mp3'
-        },
-        {
-          id: '6',
-          title: 'Night Crickets',
-          artist: 'Nature Sounds',
-          duration: 2400,
-          category: 'sleep',
-          description: 'Peaceful cricket sounds on a summer night',
-          benefits: ['Natural sleep aid', 'Reduces anxiety', 'Creates calm environment'],
-          url: '/audio/night-crickets.mp3'
-        }
-      ]
-    },
-    {
-      id: 'focus',
-      name: 'Focus & Concentration',
-      description: 'Background music to enhance productivity',
-      icon: Target,
-      color: 'from-orange-500 to-red-500',
-      tracks: [
-        {
-          id: '7',
-          title: 'Binaural Beats',
-          artist: 'Focus Lab',
-          duration: 1800,
-          category: 'focus',
-          description: 'Alpha waves for enhanced concentration',
-          benefits: ['Improves focus', 'Enhances creativity', 'Reduces mental fatigue'],
-          url: '/audio/binaural-beats.mp3'
-        },
-        {
-          id: '8',
-          title: 'Instrumental Flow',
-          artist: 'Productivity Sounds',
-          duration: 2700,
-          category: 'focus',
-          description: 'Gentle instrumental music for work',
-          benefits: ['Maintains concentration', 'Reduces stress', 'Boosts productivity'],
-          url: '/audio/instrumental-flow.mp3'
-        }
-      ]
-    }
-  ];
+  const categoryMapping: Record<string, { id: string; icon: any; color: string }> = {
+    'Nature Sounds': { id: 'nature', icon: Leaf, color: 'from-green-500 to-teal-500' },
+    'Meditation Music': { id: 'meditation', icon: Heart, color: 'from-purple-500 to-pink-500' },
+    'Sleep Sounds': { id: 'sleep', icon: Moon, color: 'from-blue-500 to-indigo-500' },
+    'Focus and Concentration': { id: 'focus', icon: Target, color: 'from-orange-500 to-red-500' }
+  };
 
   // Simulate audio data for visualization
   useEffect(() => {
@@ -178,37 +70,56 @@ function RelaxationMusicModule() {
   }, [isPlaying]);
 
   useEffect(() => {
-    // Load admin-managed music content
-    const adminContent = localStorage.getItem('mindcare_therapy_content');
-    if (adminContent) {
-      const parsedData = JSON.parse(adminContent);
-      const therapyData = Array.isArray(parsedData) ? parsedData : [];
-      const musicModule = therapyData.find((m: any) => m.id === 'music');
-      if (musicModule && musicModule.content.length > 0) {
-        const adminTracks = musicModule.content.map((content: any) => ({
-          id: content.id,
-          title: content.title,
-          artist: content.artist || 'Unknown Artist',
-          duration: content.duration * 60, // Convert minutes to seconds
-          category: content.category,
-          description: content.description,
-          benefits: content.benefits || [],
-          url: content.audioUrl || '/audio/placeholder.mp3'
-        }));
-        
-        // Update playlists with admin content
-        const updatedPlaylists = playlists.map(playlist => ({
-          ...playlist,
-          tracks: [
-            ...playlist.tracks,
-            ...adminTracks.filter((track: any) => 
-              track.category.toLowerCase().includes(playlist.id) ||
-              playlist.id === 'nature' && ['nature', 'ambient'].includes(track.category.toLowerCase())
-            )
-          ]
-        }));
-        
-        setMusicTracks(adminTracks);
+    const therapies = getAllTherapies();
+    const musicTherapy = therapies.find(t =>
+      t.title.toLowerCase().includes('relaxation') ||
+      t.title.toLowerCase().includes('music')
+    );
+
+    if (musicTherapy) {
+      const content = getTherapyContent(musicTherapy.id);
+
+      if (content && content.contentData) {
+        const { audioTracks, categories } = content.contentData as any;
+
+        const playlistsMap = new Map<string, Playlist>();
+
+        categories.forEach((category: string) => {
+          const mapping = categoryMapping[category];
+          if (mapping) {
+            playlistsMap.set(category, {
+              id: mapping.id,
+              name: category,
+              description: `${category} for relaxation and focus`,
+              icon: mapping.icon,
+              color: mapping.color,
+              tracks: []
+            });
+          }
+        });
+
+        audioTracks.forEach((track: any) => {
+          const playlist = playlistsMap.get(track.mood);
+          if (playlist) {
+            playlist.tracks.push({
+              id: track.id,
+              title: track.title,
+              artist: 'Therapy Content',
+              duration: track.duration,
+              category: categoryMapping[track.mood]?.id || 'nature',
+              description: track.description || '',
+              benefits: ['Reduces stress', 'Improves focus', 'Promotes relaxation'],
+              url: track.url
+            });
+          }
+        });
+
+        const loadedPlaylists = Array.from(playlistsMap.values()).filter(p => p.tracks.length > 0);
+        setPlaylists(loadedPlaylists);
+
+        if (loadedPlaylists.length > 0) {
+          setSelectedPlaylist(loadedPlaylists[0].id);
+        }
       }
     }
   }, []);
@@ -221,10 +132,27 @@ function RelaxationMusicModule() {
 
   const playTrack = (track: Track) => {
     setCurrentTrack(track);
-    setIsPlaying(true);
     setCurrentTime(0);
-    
-    // Save music session start
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = track.url;
+      audioRef.current.load();
+      audioRef.current.volume = volume;
+      audioRef.current.muted = isMuted;
+
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          toast.success(`Now playing: ${track.title}`);
+        })
+        .catch((error) => {
+          console.error('Error playing audio:', error);
+          toast.error('Failed to play audio');
+          setIsPlaying(false);
+        });
+    }
+
     const musicSessions = JSON.parse(localStorage.getItem('mindcare_music_sessions') || '[]');
     const newSession = {
       id: Date.now().toString(),
@@ -237,23 +165,30 @@ function RelaxationMusicModule() {
     };
     musicSessions.push(newSession);
     localStorage.setItem('mindcare_music_sessions', JSON.stringify(musicSessions));
-    
-    // Update streak for starting a relaxation session
+
     updateStreak();
-    
-    // Update therapy progress
+
     if (user?.id) {
       updateTherapyCompletion(user.id, 'music');
     }
-    
-    // Dispatch custom event for real-time updates
+
     window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
-    
-    toast.success(`Now playing: ${track.title}`);
   };
 
   const togglePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch((error) => {
+          console.error('Error playing audio:', error);
+          toast.error('Failed to play audio');
+        });
+    }
   };
 
   const nextTrack = () => {
@@ -275,24 +210,38 @@ function RelaxationMusicModule() {
   };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isPlaying && currentTrack) {
-      interval = setInterval(() => {
-        setCurrentTime(prev => {
-          if (prev >= currentTrack.duration) {
-            if (isRepeat) {
-              return 0;
-            } else {
-              nextTrack();
-              return 0;
-            }
-          }
-          return prev + 1;
-        });
-      }, 1000);
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+
+      audioRef.current.addEventListener('timeupdate', () => {
+        if (audioRef.current) {
+          setCurrentTime(Math.floor(audioRef.current.currentTime));
+        }
+      });
+
+      audioRef.current.addEventListener('ended', () => {
+        if (isRepeat && audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play();
+        } else {
+          nextTrack();
+        }
+      });
     }
-    return () => clearInterval(interval);
-  }, [isPlaying, currentTrack, isRepeat, selectedPlaylist]);
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
 
   const renderVisualization = () => {
     switch (visualizationStyle) {
@@ -364,6 +313,8 @@ function RelaxationMusicModule() {
   const currentPlaylistData = playlists.find(p => p.id === selectedPlaylist);
 
   return (
+    <>
+    <audio ref={audioRef} />
     <div className={`h-screen flex flex-col ${
       theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-50 via-blue-50 to-teal-50'
     }`}>
@@ -738,6 +689,7 @@ function RelaxationMusicModule() {
         </motion.div>
       </div>
     </div>
+    </>
   );
 }
 

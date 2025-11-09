@@ -1,4 +1,5 @@
 import { Therapy, TherapyFormData } from '../types/therapy';
+import { api } from '../services/api';
 
 const STORAGE_KEY = 'mindcare_therapies';
 
@@ -155,7 +156,34 @@ const defaultTherapies: Therapy[] = [
   }
 ];
 
-export const getAllTherapies = (): Therapy[] => {
+export const getAllTherapies = async (): Promise<Therapy[]> => {
+  try {
+    const modules = await api.therapyModules.getAll();
+    if (modules && modules.length > 0) {
+      return modules.map((m: any) => ({
+        id: m._id,
+        title: m.title,
+        description: m.description,
+        category: m.category,
+        icon: m.icon,
+        color: m.color,
+        duration: m.duration,
+        difficulty: m.difficulty,
+        sessions: m.sessions,
+        tags: m.tags,
+        status: m.status,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt
+      }));
+    }
+    return defaultTherapies;
+  } catch (error) {
+    console.error('Failed to load therapies from API, using defaults:', error);
+    return defaultTherapies;
+  }
+};
+
+export const getAllTherapiesSync = (): Therapy[] => {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultTherapies));

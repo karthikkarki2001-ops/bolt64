@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
+import { api } from '../services/api';
 
 interface MoodEntry {
   id: string;
@@ -88,37 +88,9 @@ function MoodTrackerPage() {
     const loadEntries = async () => {
       if (!user?.id) return;
       try {
-        const { data, error } = await supabase
-          .from('mood_entries')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('date', { ascending: false });
-
-        if (error) throw error;
-
-        const formattedEntries = (data || []).map((entry: any) => ({
-          id: entry.id,
-          date: entry.date,
-          primaryMood: entry.primary_mood,
-          moodIntensity: entry.mood_intensity,
-          energyLevel: entry.energy_level,
-          sleepHours: entry.sleep_hours,
-          sleepQuality: entry.sleep_quality,
-          stressLevel: entry.stress_level,
-          activities: entry.activities,
-          nutrition: entry.nutrition,
-          physicalActivity: entry.physical_activity,
-          screenTime: entry.screen_time,
-          medicationCompliance: entry.medication_compliance,
-          triggers: entry.triggers,
-          socialInteractions: entry.social_interactions,
-          gratitude: entry.gratitude,
-          notes: entry.notes,
-          weather: entry.weather
-        }));
-
-        setSavedEntries(formattedEntries);
-        updateAnalyticsData(formattedEntries);
+        const entries = await api.mood.getAll(user.id);
+        setSavedEntries(entries);
+        updateAnalyticsData(entries);
       } catch (error) {
         console.error('Failed to load mood entries:', error);
       }
@@ -196,56 +168,24 @@ function MoodTrackerPage() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('mood_entries')
-        .insert({
-          user_id: user.id,
-          date: currentEntry.date,
-          primary_mood: currentEntry.primaryMood,
-          mood_intensity: currentEntry.moodIntensity,
-          energy_level: currentEntry.energyLevel,
-          sleep_hours: currentEntry.sleepHours,
-          sleep_quality: currentEntry.sleepQuality,
-          stress_level: currentEntry.stressLevel,
-          activities: currentEntry.activities,
-          nutrition: currentEntry.nutrition,
-          physical_activity: currentEntry.physicalActivity,
-          screen_time: currentEntry.screenTime,
-          medication_compliance: currentEntry.medicationCompliance,
-          triggers: currentEntry.triggers,
-          social_interactions: currentEntry.socialInteractions,
-          gratitude: currentEntry.gratitude,
-          notes: currentEntry.notes,
-          weather: currentEntry.weather
-        })
-        .select()
-        .single();
+      const newEntry = await api.mood.create({
+        userId: user.id,
+        mood: currentEntry.moodIntensity,
+        date: currentEntry.date,
+        notes: JSON.stringify(currentEntry)
+      });
 
-      if (error) throw error;
-
-      const formattedEntry = {
-        id: data.id,
-        date: data.date,
-        primaryMood: data.primary_mood,
-        moodIntensity: data.mood_intensity,
-        energyLevel: data.energy_level,
-        sleepHours: data.sleep_hours,
-        sleepQuality: data.sleep_quality,
-        stressLevel: data.stress_level,
-        activities: data.activities,
-        nutrition: data.nutrition,
-        physicalActivity: data.physical_activity,
-        screenTime: data.screen_time,
-        medicationCompliance: data.medication_compliance,
-        triggers: data.triggers,
-        socialInteractions: data.social_interactions,
-        gratitude: data.gratitude,
-        notes: data.notes,
-        weather: data.weather
-      };
-
-      const updatedEntries = [formattedEntry, ...savedEntries];
+      const updatedEntries = [newEntry, ...savedEntries];
       setSavedEntries(updatedEntries);
+
+      // Update streak
+      await api.streak.update(user.id);
+
+      // Update therapy progress
+      const progress = await api.therapy.getProgress(user.id);
+      const moduleData = progress.moduleData || {};
+      moduleData.mood = (moduleData.mood || 0) + 1;
+      await api.therapy.updateProgress(user.id, moduleData);
 
       // Update analytics data
       updateAnalyticsData(updatedEntries);

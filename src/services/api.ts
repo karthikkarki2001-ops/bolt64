@@ -361,4 +361,123 @@ export const api = {
       return handleResponse(response);
     },
   },
+
+  therapyModules: {
+    getAll: async () => {
+      const response = await fetch(`${API_URL}/therapy-modules`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    getById: async (id: string) => {
+      const response = await fetch(`${API_URL}/therapy-modules/${id}`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    create: async (moduleData: any) => {
+      const response = await fetch(`${API_URL}/therapy-modules`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(moduleData),
+      });
+      return handleResponse(response);
+    },
+
+    update: async (id: string, moduleData: any) => {
+      const response = await fetch(`${API_URL}/therapy-modules/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(moduleData),
+      });
+      return handleResponse(response);
+    },
+
+    delete: async (id: string) => {
+      const response = await fetch(`${API_URL}/therapy-modules/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    toggleStatus: async (id: string) => {
+      const response = await fetch(`${API_URL}/therapy-modules/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+  },
+
+  therapyContents: {
+    getAll: async () => {
+      const response = await fetch(`${API_URL}/therapy-contents`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    getByTherapyId: async (therapyId: string) => {
+      const response = await fetch(`${API_URL}/therapy-contents/therapy/${therapyId}`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    save: async (contentData: any) => {
+      const response = await fetch(`${API_URL}/therapy-contents`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(contentData),
+      });
+      return handleResponse(response);
+    },
+
+    publish: async (id: string, isPublished: boolean) => {
+      const response = await fetch(`${API_URL}/therapy-contents/${id}/publish`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ isPublished }),
+      });
+      return handleResponse(response);
+    },
+
+    delete: async (id: string) => {
+      const response = await fetch(`${API_URL}/therapy-contents/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+  },
+
+  achievements: {
+    get: async (userId: string) => {
+      const response = await fetch(`${API_URL}/achievements/${userId}`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    unlock: async (userId: string, achievementData: any) => {
+      const response = await fetch(`${API_URL}/achievements/${userId}/unlock`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ achievementData }),
+      });
+      return handleResponse(response);
+    },
+
+    updateStats: async (userId: string, stats: any) => {
+      const response = await fetch(`${API_URL}/achievements/${userId}/stats`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ stats }),
+      });
+      return handleResponse(response);
+    },
+  },
 };

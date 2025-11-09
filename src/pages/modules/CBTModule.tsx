@@ -4,8 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Brain, Target, CheckCircle, Plus, Save, ArrowLeft, Lightbulb, AlertTriangle, TrendingUp, Calendar, CreditCard as Edit, Trash2, Star, Award, Clock, Heart } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ThoughtRecord {
@@ -108,11 +107,17 @@ function CBTModule() {
   ];
 
   useEffect(() => {
-    const saved = localStorage.getItem('mindcare_cbt_records');
-    if (saved) {
-      setSavedRecords(JSON.parse(saved));
-    }
-  }, []);
+    const loadRecords = async () => {
+      if (!user?.id) return;
+      try {
+        const records = await api.therapy.getCBTRecords(user.id);
+        setSavedRecords(records);
+      } catch (error) {
+        console.error('Failed to load CBT records:', error);
+      }
+    };
+    loadRecords();
+  }, [user]);
 
   const handleInputChange = (field: string, value: any) => {
     setCurrentRecord(prev => ({ ...prev, [field]: value }));
@@ -130,37 +135,44 @@ function CBTModule() {
     }
   };
 
-  const saveRecord = () => {
+  const saveRecord = async () => {
     if (!currentRecord.situation || !currentRecord.automaticThought || !currentRecord.emotion) {
       toast.error('Please complete the required fields');
       return;
     }
 
-    const newRecord: ThoughtRecord = {
-      id: Date.now().toString(),
-      userId: user?.id, // Add user ID to track records per user
-      ...currentRecord as ThoughtRecord
-    };
-
-    const updatedRecords = [...savedRecords, newRecord];
-    setSavedRecords(updatedRecords);
-    localStorage.setItem('mindcare_cbt_records', JSON.stringify(updatedRecords));
-    
-    // Update streak
-    updateStreak();
-    
-    // Update therapy progress
-    if (user?.id) {
-      updateTherapyCompletion(user.id, 'cbt');
+    if (!user?.id) {
+      toast.error('You must be logged in');
+      return;
     }
-    
-    // Dispatch custom event for real-time updates
-    window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
-    
-    toast.success('Thought record saved! Great work on challenging your thoughts.');
-    
-    // Reset form
-    setCurrentRecord({
+
+    try {
+      const newRecord = await api.therapy.createCBTRecord({
+        userId: user.id,
+        date: new Date().toISOString().split('T')[0],
+        situation: currentRecord.situation,
+        thoughts: currentRecord.automaticThought,
+        emotions: currentRecord.emotion,
+        behaviors: currentRecord.behavior || '',
+        alternativeThoughts: currentRecord.balancedThought || ''
+      });
+
+      const updatedRecords = [...savedRecords, newRecord];
+      setSavedRecords(updatedRecords);
+
+      // Update streak
+      await api.streak.update(user.id);
+
+      // Update therapy progress
+      const progress = await api.therapy.getProgress(user.id);
+      const moduleData = progress.moduleData || {};
+      moduleData.cbt = (moduleData.cbt || 0) + 1;
+      await api.therapy.updateProgress(user.id, moduleData);
+
+      toast.success('Thought record saved! Great work on challenging your thoughts.');
+
+      // Reset form
+      setCurrentRecord({
       date: new Date().toISOString().split('T')[0],
       situation: '',
       automaticThought: '',
@@ -170,8 +182,12 @@ function CBTModule() {
       balancedThought: '',
       newEmotion: '',
       newIntensity: 5
-    });
-    setCurrentStep(1);
+      });
+      setCurrentStep(1);
+    } catch (error: any) {
+      console.error('Failed to save CBT record:', error);
+      toast.error(error.message || 'Failed to save thought record');
+    }
   };
 
   const getCurrentStepContent = () => {

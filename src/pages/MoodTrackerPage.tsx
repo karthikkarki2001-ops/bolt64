@@ -15,8 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../utils/streakManager';
-import { updateTherapyCompletion } from '../utils/therapyProgressManager';
+import { api } from '../services/api';
 
 interface MoodEntry {
   id: string;
@@ -86,13 +85,18 @@ function MoodTrackerPage() {
   ];
 
   useEffect(() => {
-    // Load saved entries from localStorage
-    const saved = localStorage.getItem('mindcare_mood_entries');
-    if (saved) {
-      setSavedEntries(JSON.parse(saved));
-      updateAnalyticsData(JSON.parse(saved));
-    }
-  }, []);
+    const loadEntries = async () => {
+      if (!user?.id) return;
+      try {
+        const entries = await api.mood.getAll(user.id);
+        setSavedEntries(entries);
+        updateAnalyticsData(entries);
+      } catch (error) {
+        console.error('Failed to load mood entries:', error);
+      }
+    };
+    loadEntries();
+  }, [user]);
 
   const updateAnalyticsData = (entries: MoodEntry[]) => {
     if (entries.length > 0) {
@@ -152,40 +156,44 @@ function MoodTrackerPage() {
     }));
   };
 
-  const handleSaveEntry = () => {
+  const handleSaveEntry = async () => {
     if (!currentEntry.primaryMood) {
       toast.error('Please select your primary mood');
       return;
     }
 
-    const newEntry: MoodEntry = {
-      id: Date.now().toString(),
-      userId: user?.id, // Add user ID to track entries per user
-      ...currentEntry as MoodEntry
-    };
-
-    const updatedEntries = [...savedEntries, newEntry];
-    setSavedEntries(updatedEntries);
-    localStorage.setItem('mindcare_mood_entries', JSON.stringify(updatedEntries));
-    
-    // Update streak
-    updateStreak();
-    
-    // Update therapy progress
-    if (user?.id) {
-      updateTherapyCompletion(user.id, 'mood');
+    if (!user?.id) {
+      toast.error('You must be logged in to save entries');
+      return;
     }
-    
-    // Update analytics data
-    updateAnalyticsData(updatedEntries);
-    
-    // Dispatch custom event for real-time updates
-    window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
-    
-    toast.success('Mood entry saved successfully!');
-    
-    // Reset form for next entry
-    setCurrentEntry({
+
+    try {
+      const newEntry = await api.mood.create({
+        userId: user.id,
+        mood: currentEntry.moodIntensity,
+        date: currentEntry.date,
+        notes: JSON.stringify(currentEntry)
+      });
+
+      const updatedEntries = [...savedEntries, newEntry];
+      setSavedEntries(updatedEntries);
+
+      // Update streak
+      await api.streak.update(user.id);
+
+      // Update therapy progress
+      const progress = await api.therapy.getProgress(user.id);
+      const moduleData = progress.moduleData || {};
+      moduleData.mood = (moduleData.mood || 0) + 1;
+      await api.therapy.updateProgress(user.id, moduleData);
+
+      // Update analytics data
+      updateAnalyticsData(updatedEntries);
+
+      toast.success('Mood entry saved successfully!');
+
+      // Reset form for next entry
+      setCurrentEntry({
       date: new Date().toISOString().split('T')[0],
       primaryMood: '',
       moodIntensity: 5,
@@ -203,7 +211,11 @@ function MoodTrackerPage() {
       gratitude: '',
       notes: '',
       weather: 'Sunny'
-    });
+      });
+    } catch (error: any) {
+      console.error('Failed to save mood entry:', error);
+      toast.error(error.message || 'Failed to save mood entry');
+    }
   };
 
   const getSelectedMoodColor = () => {

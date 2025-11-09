@@ -7,8 +7,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
-import { updateStreak } from '../../utils/streakManager';
-import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
+import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface GratitudeEntry {
@@ -65,11 +64,17 @@ function GratitudeModule() {
   ];
 
   useEffect(() => {
-    const saved = localStorage.getItem('mindcare_gratitude_entries');
-    if (saved) {
-      setSavedEntries(JSON.parse(saved));
-    }
-  }, []);
+    const loadEntries = async () => {
+      if (!user?.id) return;
+      try {
+        const entries = await api.therapy.getGratitudeEntries(user.id);
+        setSavedEntries(entries);
+      } catch (error) {
+        console.error('Failed to load gratitude entries:', error);
+      }
+    };
+    loadEntries();
+  }, [user]);
 
   const handleEntryChange = (index: number, value: string) => {
     const newEntries = [...currentEntries];
@@ -77,41 +82,45 @@ function GratitudeModule() {
     setCurrentEntries(newEntries);
   };
 
-  const handleSaveEntry = () => {
+  const handleSaveEntry = async () => {
     const filledEntries = currentEntries.filter(entry => entry.trim() !== '');
-    
+
     if (filledEntries.length === 0) {
       toast.error('Please write at least one gratitude entry');
       return;
     }
 
-    const newEntry: GratitudeEntry = {
-      id: Date.now().toString(),
-      userId: user?.id, // Add user ID to track entries per user
-      date: new Date().toISOString().split('T')[0],
-      entries: filledEntries,
-      mood: selectedMood,
-      category: selectedCategory
-    };
-
-    const updatedEntries = [...savedEntries, newEntry];
-    setSavedEntries(updatedEntries);
-    localStorage.setItem('mindcare_gratitude_entries', JSON.stringify(updatedEntries));
-    
-    // Update streak
-    updateStreak();
-    
-    // Update therapy progress
-    if (user?.id) {
-      updateTherapyCompletion(user.id, 'gratitude');
+    if (!user?.id) {
+      toast.error('You must be logged in');
+      return;
     }
-    
-    // Dispatch custom event for real-time updates
-    window.dispatchEvent(new CustomEvent('mindcare-data-updated'));
-    
-    toast.success('Gratitude entry saved! Keep up the positive mindset.');
-    setCurrentEntries(['', '', '']);
-    setSelectedMood(5);
+
+    try {
+      const newEntry = await api.therapy.createGratitudeEntry({
+        userId: user.id,
+        date: new Date().toISOString().split('T')[0],
+        entries: filledEntries
+      });
+
+      const updatedEntries = [...savedEntries, newEntry];
+      setSavedEntries(updatedEntries);
+
+      // Update streak
+      await api.streak.update(user.id);
+
+      // Update therapy progress
+      const progress = await api.therapy.getProgress(user.id);
+      const moduleData = progress.moduleData || {};
+      moduleData.gratitude = (moduleData.gratitude || 0) + 1;
+      await api.therapy.updateProgress(user.id, moduleData);
+
+      toast.success('Gratitude entry saved! Keep up the positive mindset.');
+      setCurrentEntries(['', '', '']);
+      setSelectedMood(5);
+    } catch (error: any) {
+      console.error('Failed to save gratitude entry:', error);
+      toast.error(error.message || 'Failed to save gratitude entry');
+    }
   };
 
   const usePrompt = (prompt: GratitudePrompt) => {

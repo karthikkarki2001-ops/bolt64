@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AnimatePresence } from 'framer-motion';
-import { 
-  User, Search, Filter, Plus, Eye, MessageSquare, 
+import {
+  User, Search, Filter, Plus, Eye, MessageSquare,
   Calendar, BarChart3, Heart, Clock, Star, Phone,
   Mail, MapPin, Trash2, AlertTriangle, TrendingUp
 } from 'lucide-react';
@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import PatientAnalyticsModal from '../components/PatientAnalyticsModal';
 import toast from 'react-hot-toast';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 interface Patient {
   id: string;
@@ -47,15 +47,15 @@ function PatientsPage() {
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
 
   useEffect(() => {
-    const loadPatients = async () => {
+    const loadPatients = () => {
       if (!user?.id) return;
       try {
-        const allBookings = await api.bookings.getByTherapist(user.id);
+        const allBookings = mockDataService.getBookingsByTherapist(user.id);
         const therapistBookings = allBookings.filter((booking: any) =>
           booking.status !== 'deleted_by_therapist'
         );
 
-        const allUsers = await api.users.getAll();
+        const allUsers = mockDataService.getAllUsers();
       
       // Create patient records from bookings and user data
       const patientMap = new Map();
@@ -112,8 +112,10 @@ function PatientsPage() {
     };
 
     loadPatients();
-    const interval = setInterval(loadPatients, 10000);
-    return () => clearInterval(interval);
+
+    // Listen for updates from mock service
+    const unsubscribe = mockDataService.onUpdate(loadPatients);
+    return unsubscribe;
   }, [user]);
 
   const getStatusColor = (status: string) => {

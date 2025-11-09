@@ -75,10 +75,18 @@ function AdminTherapyContentEditor() {
   };
 
   const handleSaveContent = () => {
-    if (!id || !contentData) return;
+    if (!id || !contentData) {
+      console.error('Cannot save: missing id or contentData', { id, contentData });
+      toast.error('Cannot save: missing data');
+      return;
+    }
+
+    console.log('Saving content for therapy:', id);
+    console.log('Content data:', contentData);
 
     const existingContent = getTherapyContent(id);
-    saveTherapyContent(id, 'relaxation_music', contentData, existingContent?.id);
+    const saved = saveTherapyContent(id, 'relaxation_music', contentData, existingContent?.id);
+    console.log('Saved content:', saved);
     toast.success('Content saved successfully!');
   };
 
@@ -251,6 +259,11 @@ function AdminTherapyContentEditor() {
               >
                 {isRelaxationMusic && contentData ? (
                   <>
+                    <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-4 mb-6">
+                      <p className="text-blue-200 text-sm font-medium">
+                        💡 Remember to click "Save Content" button at the bottom after adding or editing tracks
+                      </p>
+                    </div>
                     <RelaxationMusicEditor
                       data={contentData}
                       onChange={setContentData}

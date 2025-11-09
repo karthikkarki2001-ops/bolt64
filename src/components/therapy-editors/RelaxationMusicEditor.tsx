@@ -43,12 +43,14 @@ export default function RelaxationMusicEditor({ data, onChange }: RelaxationMusi
   };
 
   const updateTrack = (id: string, field: keyof AudioTrack, value: any) => {
-    onChange({
+    const updatedData = {
       ...data,
       audioTracks: data.audioTracks.map(t =>
         t.id === id ? { ...t, [field]: value } : t
       )
-    });
+    };
+    console.log('Updating track:', id, field, value);
+    onChange(updatedData);
   };
 
   const handleFileUpload = async (trackId: string, file: File) => {

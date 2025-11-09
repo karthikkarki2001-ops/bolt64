@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getStreakData } from '../utils/streakManager';
-import { getPatientProgress } from '../utils/therapyProgressManager';
+import { api } from '../services/api';
 
 function PatientDashboard() {
   const { user } = useAuth();
@@ -21,176 +20,149 @@ function PatientDashboard() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load streak data
-    const streakData = getStreakData();
-    setStreak(streakData.currentStreak);
+    const loadDashboardData = async () => {
+      if (!user?.id) return;
 
-    // Load therapy progress from new system
-    if (user?.id) {
-      const therapyProgress = getPatientProgress(user.id);
-      setModulesCompleted(therapyProgress.totalCompletedSessions);
-    }
-    
-    // Load upcoming appointments
-    const savedAppointments = localStorage.getItem('mindcare_bookings');
-    if (savedAppointments) {
-      const appointments = JSON.parse(savedAppointments);
-      const upcoming = appointments.filter((apt: any) =>
-        apt.patientId === user?.id &&
-        apt.status === 'confirmed' &&
-        new Date(apt.date + ' ' + apt.time) > new Date()
-      );
-      setUpcomingAppointments(upcoming);
+      try {
+        // Load streak data
+        const streakData = await api.streak.get(user.id);
+        setStreak(streakData.currentStreak || 0);
 
-      // Set next appointment
-      if (upcoming.length > 0) {
-        const sortedUpcoming = upcoming.sort((a: any, b: any) =>
-          new Date(a.date + ' ' + a.time).getTime() - new Date(b.date + ' ' + b.time).getTime()
-        );
-        setNextAppointment(sortedUpcoming[0]);
-      } else {
-        setNextAppointment(null);
-      }
-    }
+        // Load therapy progress
+        const therapyProgress = await api.therapy.getProgress(user.id);
+        const totalSessions = Object.values(therapyProgress.moduleData || {}).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+        setModulesCompleted(totalSessions);
 
-    // Load real recent activities
-    loadRecentActivities();
-  }, [user]);
-
-  // Listen for storage changes to update data in real-time
-  useEffect(() => {
-    const handleStorageChange = () => {
-      // Update streak
-      const streakData = getStreakData();
-      setStreak(streakData.currentStreak);
-
-      // Update therapy progress
-      if (user?.id) {
-        const therapyProgress = getPatientProgress(user.id);
-        setModulesCompleted(therapyProgress.totalCompletedSessions);
-      }
-
-      // Update appointments
-      const savedAppointments = localStorage.getItem('mindcare_bookings');
-      if (savedAppointments) {
-        const appointments = JSON.parse(savedAppointments);
-        const upcoming = appointments.filter((apt: any) => 
-          apt.patientId === user?.id && 
+        // Load upcoming appointments
+        const appointments = await api.bookings.getByUser(user.id);
+        const upcoming = appointments.filter((apt: any) =>
           apt.status === 'confirmed' &&
           new Date(apt.date + ' ' + apt.time) > new Date()
         );
         setUpcomingAppointments(upcoming);
-        
+
         if (upcoming.length > 0) {
-          const sortedUpcoming = upcoming.sort((a: any, b: any) => 
+          const sortedUpcoming = upcoming.sort((a: any, b: any) =>
             new Date(a.date + ' ' + a.time).getTime() - new Date(b.date + ' ' + b.time).getTime()
           );
           setNextAppointment(sortedUpcoming[0]);
         } else {
           setNextAppointment(null);
         }
+
+        // Load recent activities
+        await loadRecentActivities();
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
       }
-
-      // Update recent activities
-      loadRecentActivities();
     };
 
-    // Listen for storage events
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for custom events for same-tab updates
-    window.addEventListener('mindcare-data-updated', handleStorageChange);
-    window.addEventListener('mindcare-therapy-progress-updated', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('mindcare-data-updated', handleStorageChange);
-      window.removeEventListener('mindcare-therapy-progress-updated', handleStorageChange);
-    };
+    loadDashboardData();
   }, [user]);
 
-  const loadRecentActivities = () => {
+  // Refresh data periodically
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!user?.id) return;
+      try {
+        const streakData = await api.streak.get(user.id);
+        setStreak(streakData.currentStreak || 0);
+
+        const therapyProgress = await api.therapy.getProgress(user.id);
+        const totalSessions = Object.values(therapyProgress.moduleData || {}).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+        setModulesCompleted(totalSessions);
+
+        const appointments = await api.bookings.getByUser(user.id);
+        const upcoming = appointments.filter((apt: any) =>
+          apt.status === 'confirmed' &&
+          new Date(apt.date + ' ' + apt.time) > new Date()
+        );
+        setUpcomingAppointments(upcoming);
+
+        if (upcoming.length > 0) {
+          const sortedUpcoming = upcoming.sort((a: any, b: any) =>
+            new Date(a.date + ' ' + a.time).getTime() - new Date(b.date + ' ' + b.time).getTime()
+          );
+          setNextAppointment(sortedUpcoming[0]);
+        } else {
+          setNextAppointment(null);
+        }
+      } catch (error) {
+        console.error('Failed to refresh dashboard:', error);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const loadRecentActivities = async () => {
     if (!user?.id) return;
 
-    const activities: any[] = [];
+    try {
+      const activities: any[] = [];
 
-    // Load mood tracker entries
-    const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
-    const userMoodEntries = moodEntries
-      .filter((entry: any) => entry.userId === user.id || !entry.userId)
-      .map((entry: any) => ({
+      // Load mood tracker entries
+      const moodEntries = await api.mood.getByUser(user.id);
+      const userMoodEntries = moodEntries.map((entry: any) => ({
         module: 'Mood Tracker',
         time: getRelativeTime(entry.date),
         timestamp: new Date(entry.date).getTime(),
         duration: '5 min',
         type: 'mood'
       }));
-    activities.push(...userMoodEntries);
+      activities.push(...userMoodEntries);
 
-    // Load CBT records
-    const cbtRecords = JSON.parse(localStorage.getItem('mindcare_cbt_records') || '[]');
-    const userCBTRecords = cbtRecords
-      .filter((record: any) => record.userId === user.id || !record.userId)
-      .map((record: any) => ({
+      // Load CBT records
+      const cbtRecords = await api.therapy.getSessions(user.id, 'cbt');
+      const userCBTRecords = cbtRecords.map((record: any) => ({
         module: 'CBT Journaling',
-        time: getRelativeTime(record.date),
-        timestamp: new Date(record.date).getTime(),
+        time: getRelativeTime(record.createdAt || record.date),
+        timestamp: new Date(record.createdAt || record.date).getTime(),
         duration: '20 min',
         type: 'cbt'
       }));
-    activities.push(...userCBTRecords);
+      activities.push(...userCBTRecords);
 
-    // Load gratitude entries
-    const gratitudeEntries = JSON.parse(localStorage.getItem('mindcare_gratitude_entries') || '[]');
-    const userGratitudeEntries = gratitudeEntries
-      .filter((entry: any) => entry.userId === user.id || !entry.userId)
-      .map((entry: any) => ({
+      // Load gratitude entries
+      const gratitudeEntries = await api.therapy.getSessions(user.id, 'gratitude');
+      const userGratitudeEntries = gratitudeEntries.map((entry: any) => ({
         module: 'Gratitude Practice',
-        time: getRelativeTime(entry.date),
-        timestamp: new Date(entry.date).getTime(),
+        time: getRelativeTime(entry.createdAt || entry.date),
+        timestamp: new Date(entry.createdAt || entry.date).getTime(),
         duration: '10 min',
         type: 'gratitude'
       }));
-    activities.push(...userGratitudeEntries);
+      activities.push(...userGratitudeEntries);
 
-    // Load sleep logs
-    const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]');
-    const userSleepLogs = sleepLogs
-      .filter((log: any) => log.userId === user.id || !log.userId)
-      .map((log: any) => ({
-        module: 'Sleep Therapy',
-        time: getRelativeTime(log.date),
-        timestamp: new Date(log.date).getTime(),
-        duration: '30 min',
-        type: 'sleep'
-      }));
-    activities.push(...userSleepLogs);
+      // Load all bookings (confirmed and completed)
+      const bookings = await api.bookings.getByUser(user.id);
+      const userSessions = bookings
+        .filter((booking: any) => booking.status === 'completed' || booking.status === 'confirmed')
+        .map((booking: any) => ({
+          module: booking.status === 'confirmed' ? 'Appointment Booked' : 'Video Therapy Session',
+          time: getRelativeTime(booking.createdAt || booking.date),
+          timestamp: new Date(booking.createdAt || booking.date).getTime(),
+          duration: '60 min',
+          type: 'session'
+        }));
+      activities.push(...userSessions);
 
-    // Load all bookings (confirmed and completed)
-    const bookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const userSessions = bookings
-      .filter((booking: any) => booking.patientId === user.id && (booking.status === 'completed' || booking.status === 'confirmed'))
-      .map((booking: any) => ({
-        module: booking.status === 'confirmed' ? 'Appointment Booked' : 'Video Therapy Session',
-        time: getRelativeTime(booking.createdAt || booking.date),
-        timestamp: new Date(booking.createdAt || booking.date).getTime(),
-        duration: '60 min',
-        type: 'session'
-      }));
-    activities.push(...userSessions);
+      // Sort by most recent timestamp and limit to 4 items
+      const sortedActivities = activities
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 4);
 
-    // Sort by most recent timestamp and limit to 4 items
-    const sortedActivities = activities
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 4);
-
-    // If no real activities, show default message
-    if (sortedActivities.length === 0) {
-      setRecentActivities([
-        { module: 'Welcome to MindCare!', time: 'Just now', duration: '', type: 'welcome', timestamp: Date.now() }
-      ]);
-    } else {
-      setRecentActivities(sortedActivities);
+      // If no real activities, show default message
+      if (sortedActivities.length === 0) {
+        setRecentActivities([
+          { module: 'Welcome to MindCare!', time: 'Just now', duration: '', type: 'welcome', timestamp: Date.now() }
+        ]);
+      } else {
+        setRecentActivities(sortedActivities);
+      }
+    } catch (error) {
+      console.error('Failed to load recent activities:', error);
+      setRecentActivities([]);
     }
   };
 

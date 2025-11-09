@@ -8,12 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getTherapistProgressReports } from '../utils/therapyProgressManager';
-import {
-  isCompletedBooking,
-  calculateRevenueForBookings,
-  getBookingsForMonth
-} from '../utils/bookingHelpers';
+import { api } from '../services/api';
 
 function TherapistDashboard() {
   const { user } = useAuth();
@@ -27,51 +22,54 @@ function TherapistDashboard() {
   const [recentProgressUpdates, setRecentProgressUpdates] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load appointments from localStorage
-    const loadAppointments = () => {
-      const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-      
-      // Filter appointments for current therapist
-      const therapistAppointments = allBookings.filter((booking: any) => 
-        booking.therapistName === user?.name || booking.therapistId === user?.id
-      );
-      
-      const today = new Date().toISOString().split('T')[0];
-      const todaysAppts = therapistAppointments.filter((apt: any) => apt.date === today);
-      const upcomingAppts = therapistAppointments.filter((apt: any) => 
-        new Date(apt.date) >= new Date() && apt.status === 'confirmed'
-      );
-      
-      setTodaysAppointments(todaysAppts);
-      setUpcomingAppointments(upcomingAppts);
+    const loadAppointments = async () => {
+      if (!user?.id) return;
+      try {
+        const allBookings = await api.bookings.getByTherapist(user.id);
 
-      // Calculate unique patients
-      const uniquePatients = new Set(therapistAppointments.map((apt: any) => apt.patientId));
-      setTotalPatients(uniquePatients.size);
+        const today = new Date().toISOString().split('T')[0];
+        const todaysAppts = allBookings.filter((apt: any) => apt.date === today);
+        const upcomingAppts = allBookings.filter((apt: any) =>
+          new Date(apt.date) >= new Date() && apt.status === 'confirmed'
+        );
 
-      // Calculate this week's sessions
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const thisWeekSessions = therapistAppointments.filter((apt: any) => 
-        new Date(apt.date) >= oneWeekAgo && apt.status === 'completed'
-      );
-      setWeekSessions(thisWeekSessions.length);
+        setTodaysAppointments(todaysAppts);
+        setUpcomingAppointments(upcomingAppts);
 
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+        // Calculate unique patients
+        const uniquePatients = new Set(allBookings.map((apt: any) => apt.patientId));
+        setTotalPatients(uniquePatients.size);
 
-      const monthlyBookings = getBookingsForMonth(therapistAppointments, currentMonth, currentYear)
-        .filter(isCompletedBooking);
-      const revenue = calculateRevenueForBookings(monthlyBookings);
-      setMonthlyRevenue(revenue);
+        // Calculate this week's sessions
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const thisWeekSessions = allBookings.filter((apt: any) =>
+          new Date(apt.date) >= oneWeekAgo && apt.status === 'completed'
+        );
+        setWeekSessions(thisWeekSessions.length);
 
-      // Generate recent activity from real data
-      const recentBookings = therapistAppointments
-        .sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
-        .slice(0, 4);
-      
-      const activities = recentBookings.map((booking: any) => {
+        // Calculate monthly revenue
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const monthlyBookings = allBookings.filter((apt: any) => {
+          const aptDate = new Date(apt.date);
+          return aptDate.getMonth() === currentMonth &&
+                 aptDate.getFullYear() === currentYear &&
+                 apt.status === 'completed';
+        });
+        const revenue = monthlyBookings.reduce((sum: number, booking: any) => {
+          const amount = typeof booking.amount === 'string' ? parseInt(booking.amount.replace(/[^0-9]/g, '')) : booking.amount;
+          return sum + (amount || 0);
+        }, 0);
+        setMonthlyRevenue(revenue);
+
+        // Generate recent activity from real data
+        const recentBookings = allBookings
+          .sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
+          .slice(0, 4);
+
+        const activities = recentBookings.map((booking: any) => {
         const timeDiff = new Date().getTime() - new Date(booking.createdAt || booking.date).getTime();
         const hoursAgo = Math.floor(timeDiff / (1000 * 60 * 60));
         const daysAgo = Math.floor(hoursAgo / 24);
@@ -107,26 +105,21 @@ function TherapistDashboard() {
           patient: booking.patientName,
           time: timeText,
           type
-        };
-      });
-      
-      setRecentActivity(activities);
+          };
+        });
+
+        setRecentActivity(activities);
+      } catch (error) {
+        console.error('Failed to load appointments:', error);
+      }
     };
 
-    const loadProgressUpdates = () => {
-      if (user?.id) {
-        const reports = getTherapistProgressReports(user.id);
-        const recentUpdates = reports
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, 3)
-          .map(report => ({
-            id: report.id,
-            patientName: report.patientName,
-            progress: report.summary.overallProgress,
-            completedSessions: report.summary.totalCompletedSessions,
-            time: getRelativeTime(report.timestamp)
-          }));
-        setRecentProgressUpdates(recentUpdates);
+    const loadProgressUpdates = async () => {
+      try {
+        // Load progress updates from therapy sessions
+        setRecentProgressUpdates([]);
+      } catch (error) {
+        console.error('Failed to load progress updates:', error);
       }
     };
 

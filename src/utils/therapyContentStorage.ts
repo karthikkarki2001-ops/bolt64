@@ -173,7 +173,7 @@ export function getDefaultContentForType(type: keyof TherapyContentData): Therap
     },
     relaxation_music: {
       audioTracks: [],
-      categories: ['Calm', 'Focus', 'Sleep', 'Stress Relief', 'Meditation']
+      categories: ['Nature Sounds', 'Meditation Music', 'Sleep Sounds', 'Focus and Concentration']
     },
     art_therapy: {
       artPrompts: [

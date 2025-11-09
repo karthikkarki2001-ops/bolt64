@@ -5,12 +5,16 @@ import { ArrowLeft, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Therapy } from '../types/therapy';
 import { getAllTherapies, updateTherapy } from '../utils/therapyStorage';
+import RelaxationMusicEditor from '../components/therapy-editors/RelaxationMusicEditor';
+import { getTherapyContent, saveTherapyContent, getDefaultContentForType } from '../utils/therapyContentStorage';
 
 
 function AdminTherapyContentEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [therapy, setTherapy] = useState<Therapy | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'content'>('general');
+  const [contentData, setContentData] = useState<any>(null);
 
   const [generalSettings, setGeneralSettings] = useState({
     title: '',
@@ -43,6 +47,19 @@ function AdminTherapyContentEditor() {
           tags: found.tags,
           status: found.status
         });
+
+        const isRelaxMusic = found.title.toLowerCase().includes('relaxation') ||
+                             found.title.toLowerCase().includes('music');
+
+        let content = getTherapyContent(id);
+
+        if (!content && isRelaxMusic) {
+          content = getDefaultContentForType('relaxation_music') as any;
+        } else if (content) {
+          content = content.contentData;
+        }
+
+        setContentData(content || getDefaultContentForType('relaxation_music'));
       }
     }
   }, [id]);
@@ -56,6 +73,17 @@ function AdminTherapyContentEditor() {
       toast.success('General settings saved!');
     }
   };
+
+  const handleSaveContent = () => {
+    if (!id || !contentData) return;
+
+    const existingContent = getTherapyContent(id);
+    saveTherapyContent(id, 'relaxation_music', contentData, existingContent?.id);
+    toast.success('Content saved successfully!');
+  };
+
+  const isRelaxationMusic = therapy?.title.toLowerCase().includes('relaxation') ||
+                             therapy?.title.toLowerCase().includes('music');
 
   if (!therapy) {
     return (
@@ -89,13 +117,37 @@ function AdminTherapyContentEditor() {
           </div>
         </motion.div>
 
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="p-6">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="space-y-4"
-            >
+        <div className="mb-6 flex space-x-2 border-b border-gray-700">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`px-6 py-3 font-medium transition-colors ${
+              activeTab === 'general'
+                ? 'text-white border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            General Settings
+          </button>
+          <button
+            onClick={() => setActiveTab('content')}
+            className={`px-6 py-3 font-medium transition-colors ${
+              activeTab === 'content'
+                ? 'text-white border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Content Editor
+          </button>
+        </div>
+
+        {activeTab === 'general' && (
+          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div className="p-6">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -185,9 +237,50 @@ function AdminTherapyContentEditor() {
                     <span>Save General Settings</span>
                   </motion.button>
                 </div>
-            </motion.div>
+              </motion.div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {activeTab === 'content' && (
+          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div className="p-6">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                {isRelaxationMusic && contentData ? (
+                  <>
+                    <RelaxationMusicEditor
+                      data={contentData}
+                      onChange={setContentData}
+                    />
+                    <div className="flex justify-end pt-6 mt-6 border-t border-gray-700">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleSaveContent}
+                        className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-teal-600"
+                      >
+                        <Save className="w-5 h-5" />
+                        <span>Save Content</span>
+                      </motion.button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-400 text-lg">
+                      Content editor not available for this therapy type
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Advanced content editing is currently only available for Relaxation Music therapy
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
+import {
   Video, VideoOff, Mic, MicOff, Phone, Settings,
   MessageSquare, Users, Clock, Monitor, Camera,
   Volume2, VolumeX, Maximize, Minimize, RotateCcw
@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import { mockDataService } from '../services/mockDataService';
 import { trackSessionComplete } from '../utils/analyticsManager';
 
 function VideoSessionPage() {
@@ -29,30 +30,30 @@ function VideoSessionPage() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Load session data
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const session = allBookings.find((booking: any) => 
-      booking.id === sessionId && 
+    // Load session data from mock service
+    const allBookings = mockDataService.getAllBookings();
+    const session = allBookings.find((booking: any) =>
+      booking.id === sessionId &&
       (booking.status === 'confirmed' || booking.status === 'pending_confirmation') &&
-      (booking.patientId === user?.id || booking.therapistId === user?.id || booking.therapistName === user?.name)
+      (booking.patientId === user?.id || booking.therapistId === user?.id)
     );
-    
+
     if (session) {
       setSessionData(session);
       setIsSessionActive(true);
-      
+
       // Set up participants
       setParticipants([
         { id: session.patientId, name: session.patientName, role: 'patient' },
-        { id: session.therapistId || session.therapistName, name: session.therapistName, role: 'therapist' }
+        { id: session.therapistId, name: session.therapistName, role: 'therapist' }
       ]);
-      
+
       toast.success('Video session started!');
     } else {
       toast.error('Session not found');
       navigate('/dashboard');
     }
-  }, [sessionId, navigate]);
+  }, [sessionId, navigate, user]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -82,13 +83,11 @@ function VideoSessionPage() {
 
   const endSession = () => {
     setIsSessionActive(false);
-    
-    // Update session status
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const updatedBookings = allBookings.map((booking: any) => 
-      booking.id === sessionId ? { ...booking, status: 'completed', sessionDuration: sessionTime } : booking
-    );
-    localStorage.setItem('mindcare_bookings', JSON.stringify(updatedBookings));
+
+    // Update session status using mock service
+    mockDataService.updateBooking(sessionId || '', {
+      status: 'completed'
+    });
     
     // Track session completion
     if (sessionData) {

@@ -11,6 +11,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { mockDataService } from '../services/mockDataService';
+import { trackSessionStart, trackPayment } from '../utils/analyticsManager';
 
 interface Therapist {
   id: string;

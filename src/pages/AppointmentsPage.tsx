@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Calendar, Clock, Video, Phone, User, MapPin, 
+import {
+  Calendar, Clock, Video, Phone, User, MapPin,
   CheckCircle, XCircle, AlertCircle, Plus, Search,
   Filter, Edit, Trash2, Eye, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import { mockDataService } from '../services/mockDataService';
 import { trackSessionComplete } from '../utils/analyticsManager';
 
 interface Appointment {
@@ -38,19 +39,13 @@ function AppointmentsPage() {
   ]);
 
   useEffect(() => {
-    // Load appointments from localStorage
+    // Load appointments from mock service
     const loadAppointments = () => {
-      const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-      
-      // Filter appointments for current therapist by both ID and name matching
+      const allBookings = mockDataService.getBookingsByTherapist(user?.id || '');
+
+      // Convert bookings to appointments format
       const therapistAppointments = allBookings
-        .filter((booking: any) => {
-          // Match by therapist name or ID, and ensure it's for this specific therapist
-          return (booking.therapistName === user?.name || 
-                  booking.therapistId === user?.id ||
-                  booking.therapistId === user?.name) && // Handle cases where name was used as ID
-                 booking.status !== 'cancelled'; // Don't show cancelled appointments
-        })
+        .filter((booking: any) => booking.status !== 'cancelled')
         .map((booking: any) => ({
           id: booking.id,
           patientName: booking.patientName,
@@ -59,21 +54,21 @@ function AppointmentsPage() {
           time: booking.time,
           duration: 50,
           type: 'Therapy Session',
-          status: booking.status === 'pending_confirmation' ? 'pending' : 
+          status: booking.status === 'pending_confirmation' ? 'pending' :
                   booking.status === 'confirmed' ? 'confirmed' :
                   booking.status === 'completed' ? 'completed' : 'pending',
           sessionType: booking.sessionType || 'video',
           notes: booking.notes || ''
         }));
-      
+
       setAppointments(therapistAppointments);
     };
 
     loadAppointments();
-    
-    // Set up interval to refresh appointments
-    const interval = setInterval(loadAppointments, 5000);
-    return () => clearInterval(interval);
+
+    // Listen for updates from mock service
+    const unsubscribe = mockDataService.onUpdate(loadAppointments);
+    return unsubscribe;
   }, [user]);
 
   const getStatusColor = (status: string) => {
@@ -97,29 +92,22 @@ function AppointmentsPage() {
 
   const handleStatusChange = (appointmentId: string, newStatus: string) => {
     // Update appointment status in localStorage
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+    const allBookings = mockDataService.getAllBookings();
     const appointmentToUpdate = allBookings.find((booking: any) => booking.id === appointmentId);
-    const updatedBookings = allBookings.map((booking: any) => 
-      booking.id === appointmentId ? { ...booking, status: newStatus } : booking
-    );
-    localStorage.setItem('mindcare_bookings', JSON.stringify(updatedBookings));
-    
-    // Update local state
-    setAppointments(prev => prev.map(apt => 
-      apt.id === appointmentId ? { ...apt, status: newStatus as any } : apt
-    ));
-    
+
+    mockDataService.updateBooking(appointmentId, { status: newStatus });
+
     // Track session completion in analytics
     if (newStatus === 'completed' && appointmentToUpdate) {
       trackSessionComplete({
         patientId: appointmentToUpdate.patientId,
         therapistId: appointmentToUpdate.therapistId,
         sessionType: appointmentToUpdate.sessionType || 'video',
-        duration: 50, // Default session duration
-        rating: 5 // Default rating
+        duration: 50,
+        rating: 5
       });
     }
-    
+
     toast.success(`Appointment ${newStatus}`);
   };
 
@@ -132,14 +120,7 @@ function AppointmentsPage() {
       return;
     }
 
-    // Remove appointment from localStorage
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const updatedBookings = allBookings.filter((booking: any) => booking.id !== appointmentId);
-    localStorage.setItem('mindcare_bookings', JSON.stringify(updatedBookings));
-
-    // Update local state
-    setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
-
+    mockDataService.deleteBooking(appointmentId);
     toast.success('Appointment deleted successfully');
   };
 

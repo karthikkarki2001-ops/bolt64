@@ -119,8 +119,14 @@ function RelaxationMusicModule() {
 
         if (loadedPlaylists.length > 0) {
           setSelectedPlaylist(loadedPlaylists[0].id);
+        } else {
+          console.warn('No audio tracks found in therapy content');
         }
+      } else {
+        console.warn('No therapy content found for relaxation music');
       }
+    } else {
+      console.warn('No relaxation music therapy found');
     }
   }, []);
 
@@ -131,6 +137,11 @@ function RelaxationMusicModule() {
   };
 
   const playTrack = (track: Track) => {
+    if (!track.url) {
+      toast.error('Audio file not found for this track');
+      return;
+    }
+
     setCurrentTrack(track);
     setCurrentTime(0);
 
@@ -148,7 +159,8 @@ function RelaxationMusicModule() {
         })
         .catch((error) => {
           console.error('Error playing audio:', error);
-          toast.error('Failed to play audio');
+          console.error('Track URL:', track.url);
+          toast.error('Failed to play audio. Please check the file format.');
           setIsPlaying(false);
         });
     }
@@ -353,6 +365,7 @@ function RelaxationMusicModule() {
         </motion.div>
 
         {/* Playlist Selection */}
+        {playlists.length > 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -381,6 +394,35 @@ function RelaxationMusicModule() {
             ))}
           </div>
         </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={`mb-4 p-8 rounded-xl text-center ${
+              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            } shadow-lg`}
+          >
+            <Headphones className={`w-20 h-20 mx-auto mb-4 ${
+              theme === 'dark' ? 'text-gray-600' : 'text-gray-300'
+            }`} />
+            <h3 className={`text-xl font-semibold mb-2 ${
+              theme === 'dark' ? 'text-white' : 'text-gray-800'
+            }`}>
+              No Audio Tracks Available
+            </h3>
+            <p className={`text-sm mb-4 ${
+              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              Audio content needs to be uploaded by an administrator before you can start listening.
+            </p>
+            <p className={`text-xs ${
+              theme === 'dark' ? 'text-gray-500' : 'text-gray-500'
+            }`}>
+              Please contact your therapist or administrator to add relaxation music tracks.
+            </p>
+          </motion.div>
+        )}
 
         {/* Visualization Area */}
         {currentTrack && (
@@ -561,11 +603,18 @@ function RelaxationMusicModule() {
           <h3 className={`text-lg font-semibold mb-4 ${
             theme === 'dark' ? 'text-white' : 'text-gray-800'
           }`}>
-            {currentPlaylistData?.name}
+            {currentPlaylistData?.name || 'Tracks'}
           </h3>
-          
+
+          {!currentPlaylistData || currentPlaylistData.tracks.length === 0 ? (
+            <div className={`text-center py-12 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              <Music className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">No audio tracks available</p>
+              <p className="text-sm">Admin needs to upload audio tracks in the Content Editor</p>
+            </div>
+          ) : (
           <div className="space-y-3">
-            {currentPlaylistData?.tracks.map((track, index) => (
+            {currentPlaylistData.tracks.map((track, index) => (
               <motion.div
                 key={track.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -643,6 +692,7 @@ function RelaxationMusicModule() {
               </motion.div>
             ))}
           </div>
+          )}
         </motion.div>
 
         {/* Session Timer */}

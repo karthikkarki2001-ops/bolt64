@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import { api } from '../services/api';
 
 function AnalyticsPage() {
   const { user } = useAuth();
@@ -38,18 +39,22 @@ function AnalyticsPage() {
     }
   };
 
-  const loadAnalyticsData = () => {
+  const loadAnalyticsData = async () => {
     setIsLoading(true);
-    
-    // Get real data from localStorage
-    const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-    const bookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
-    const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]');
-    const cbtRecords = JSON.parse(localStorage.getItem('mindcare_cbt_records') || '[]');
-    const gratitudeEntries = JSON.parse(localStorage.getItem('mindcare_gratitude_entries') || '[]');
-    const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]');
-    const therapistServices = JSON.parse(localStorage.getItem('mindcare_therapist_services') || '[]');
-    const availableTherapists = JSON.parse(localStorage.getItem('mindcare_therapists') || '[]');
+
+    try {
+      // Fetch real data from MongoDB API
+      const [registeredUsers, bookings, moodEntries, cbtRecords, gratitudeEntries, therapistServices] = await Promise.all([
+        api.users.getAll(),
+        api.bookings.getAll(),
+        api.mood.getAll(),
+        api.therapy.getCBTRecords(),
+        api.therapy.getGratitudeEntries(),
+        api.therapistServices.getAll()
+      ]);
+
+      const sleepLogs = [];
+      const availableTherapists = registeredUsers.filter((u: any) => u.role === 'therapist');
     
     // Load patient engagement data
     const engagementData = JSON.parse(localStorage.getItem('mindcare_patient_engagement') || '[]');
@@ -329,6 +334,11 @@ function AnalyticsPage() {
     setAnalyticsData(analytics);
     setLastUpdated(new Date());
     setIsLoading(false);
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+      toast.error('Failed to load analytics data');
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {

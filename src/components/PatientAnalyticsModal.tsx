@@ -13,6 +13,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
 import { getPatientProgress } from '../utils/therapyProgressManager';
+import { api } from '../services/api';
 
 interface PatientAnalyticsModalProps {
   patient: any;
@@ -47,71 +48,67 @@ function PatientAnalyticsModal({ patient, isOpen, onClose }: PatientAnalyticsMod
     }
   }, [isOpen, patient]);
 
-  const loadPatientData = () => {
+  const loadPatientData = async () => {
     setLoading(true);
-    
-    // Load therapy progress from new system
-    const therapyProgress = getPatientProgress(patient.id);
-    
-    // Load all patient activity data from localStorage
-    const moodEntries = JSON.parse(localStorage.getItem('mindcare_mood_entries') || '[]')
-      .filter((entry: any) => entry.userId === patient.id || (!entry.userId && patient.id === '1')); // Include demo data for demo patient
-    
-    const cbtRecords = JSON.parse(localStorage.getItem('mindcare_cbt_records') || '[]')
-      .filter((record: any) => record.userId === patient.id || (!record.userId && patient.id === '1'));
-    
-    const gratitudeEntries = JSON.parse(localStorage.getItem('mindcare_gratitude_entries') || '[]')
-      .filter((entry: any) => entry.userId === patient.id || (!entry.userId && patient.id === '1'));
-    
-    const stressLogs = JSON.parse(localStorage.getItem('mindcare_stress_logs') || '[]')
-      .filter((log: any) => log.userId === patient.id || (!log.userId && patient.id === '1'));
-    
-    const exposureSessions = JSON.parse(localStorage.getItem('mindcare_exposure_sessions') || '[]')
-      .filter((session: any) => session.userId === patient.id || (!session.userId && patient.id === '1'));
-    
-    const videoProgress = JSON.parse(localStorage.getItem('mindcare_video_progress') || '[]')
-      .filter((progress: any) => progress.userId === patient.id || (!progress.userId && patient.id === '1'));
-    
-    const artSessions = JSON.parse(localStorage.getItem('mindcare_art_sessions') || '[]')
-      .filter((session: any) => session.userId === patient.id || (!session.userId && patient.id === '1'));
-    
-    const mindfulnessSessions = JSON.parse(localStorage.getItem('mindcare_mindfulness_sessions') || '[]')
-      .filter((session: any) => session.userId === patient.id || (!session.userId && patient.id === '1'));
-    
-    const tetrisSessions = JSON.parse(localStorage.getItem('mindcare_tetris_sessions') || '[]')
-      .filter((session: any) => session.userId === patient.id || (!session.userId && patient.id === '1'));
-    
-    const musicSessions = JSON.parse(localStorage.getItem('mindcare_music_sessions') || '[]')
-      .filter((session: any) => session.userId === patient.id || (!session.userId && patient.id === '1'));
-    
-    const actValues = JSON.parse(localStorage.getItem('mindcare_act_values') || '[]')
-      .filter((value: any) => value.userId === patient.id || (!value.userId && patient.id === '1'));
-    
-    const sleepLogs = JSON.parse(localStorage.getItem('mindcare_sleep_logs') || '[]')
-      .filter((log: any) => log.userId === patient.id || (!log.userId && patient.id === '1'));
 
-    setPatientData({
-      moodEntries,
-      cbtRecords,
-      gratitudeEntries,
-      stressLogs,
-      exposureSessions,
-      videoProgress,
-      artSessions,
-      mindfulnessSessions,
-      tetrisSessions,
-      musicSessions,
-      actValues,
-      sleepLogs
-    });
-    
-    // Add therapy progress data
-    setPatientData(prev => ({
-      ...prev,
-      therapyProgress: therapyProgress.modules
-    }));
-    
-    setLoading(false);
+    try {
+      // Load therapy progress from new system
+      const therapyProgress = getPatientProgress(patient.id);
+
+      // Fetch all patient activity data from MongoDB API
+      const [allMoodEntries, allCbtRecords, allGratitudeEntries, allTherapySessions] = await Promise.all([
+        api.mood.getAll(patient.id),
+        api.therapy.getCBTRecords(patient.id),
+        api.therapy.getGratitudeEntries(patient.id),
+        api.therapy.getSessions({ userId: patient.id })
+      ]);
+
+      // Filter mood entries for this patient
+      const moodEntries = allMoodEntries.filter((entry: any) =>
+        entry.userId === patient.id || (!entry.userId && patient.id === '1')
+      );
+
+      const cbtRecords = allCbtRecords.filter((record: any) =>
+        record.userId === patient.id || (!record.userId && patient.id === '1')
+      );
+
+      const gratitudeEntries = allGratitudeEntries.filter((entry: any) =>
+        entry.userId === patient.id || (!entry.userId && patient.id === '1')
+      );
+
+      // Group therapy sessions by module type
+      const stressLogs = allTherapySessions.filter((s: any) => s.moduleName === 'stress-management');
+      const exposureSessions = allTherapySessions.filter((s: any) => s.moduleName === 'exposure-therapy');
+      const videoProgress = allTherapySessions.filter((s: any) => s.moduleName === 'video-therapy');
+      const artSessions = allTherapySessions.filter((s: any) => s.moduleName === 'art-therapy');
+      const mindfulnessSessions = allTherapySessions.filter((s: any) => s.moduleName === 'mindfulness');
+      const tetrisSessions = allTherapySessions.filter((s: any) => s.moduleName === 'tetris-therapy');
+      const musicSessions = allTherapySessions.filter((s: any) => s.moduleName === 'relaxation-music');
+      const actValues = allTherapySessions.filter((s: any) => s.moduleName === 'act');
+      const sleepLogs = allTherapySessions.filter((s: any) => s.moduleName === 'sleep-therapy');
+
+      setPatientData({
+        moodEntries,
+        cbtRecords,
+        gratitudeEntries,
+        stressLogs,
+        exposureSessions,
+        videoProgress,
+        artSessions,
+        mindfulnessSessions,
+        tetrisSessions,
+        musicSessions,
+        actValues,
+        sleepLogs,
+        therapyProgress: therapyProgress.modules
+      } as any);
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to load patient analytics:', error);
+      toast.error('Failed to load patient analytics');
+      setLoading(false);
+    }
   };
 
   const filterDataByTimeframe = (data: any[], timeframe: string) => {

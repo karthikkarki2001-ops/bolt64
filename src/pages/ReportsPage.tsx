@@ -21,6 +21,7 @@ import {
   calculateRevenueForBookings,
   getBookingsForMonth
 } from '../utils/bookingHelpers';
+import { api } from '../services/api';
 
 function ReportsPage() {
   const { user } = useAuth();
@@ -32,33 +33,36 @@ function ReportsPage() {
   const [therapistSpecificData, setTherapistSpecificData] = useState<any>(null);
 
   useEffect(() => {
-    // Load therapist-specific analytics data
-    const therapistAnalytics = getTherapistSpecificAnalytics();
-    setAnalytics(therapistAnalytics);
-    setTherapistSpecificData(therapistAnalytics);
-    
-    // Generate time series data
-    const timeData = generateTherapistTimeSeriesData();
-    setTimeSeriesData(timeData);
-    
+    const loadData = async () => {
+      try {
+        // Load therapist-specific analytics data
+        const therapistAnalytics = await getTherapistSpecificAnalytics();
+        setAnalytics(therapistAnalytics);
+        setTherapistSpecificData(therapistAnalytics);
+
+        // Generate time series data
+        const timeData = await generateTherapistTimeSeriesData();
+        setTimeSeriesData(timeData);
+      } catch (error) {
+        console.error('Failed to load report data:', error);
+        toast.error('Failed to load report data');
+      }
+    };
+
+    loadData();
+
     // Set up interval to refresh data
     const interval = setInterval(() => {
-      const updatedAnalytics = getTherapistSpecificAnalytics();
-      setAnalytics(updatedAnalytics);
-      setTherapistSpecificData(updatedAnalytics);
-      setTimeSeriesData(generateTherapistTimeSeriesData());
+      loadData();
     }, 10000);
-    
+
     // Listen for analytics updates
     const handleAnalyticsUpdate = () => {
-      const updatedAnalytics = getTherapistSpecificAnalytics();
-      setAnalytics(updatedAnalytics);
-      setTherapistSpecificData(updatedAnalytics);
-      setTimeSeriesData(generateTherapistTimeSeriesData());
+      loadData();
     };
-    
+
     window.addEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
-    
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
@@ -66,8 +70,8 @@ function ReportsPage() {
   }, []);
 
   // Function to get therapist-specific analytics
-  const getTherapistSpecificAnalytics = () => {
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+  const getTherapistSpecificAnalytics = async () => {
+    const allBookings = await api.bookings.getAll();
 
     const therapistBookings = allBookings.filter((booking: any) =>
       booking.therapistName === user?.name || booking.therapistId === user?.id
@@ -123,8 +127,8 @@ function ReportsPage() {
     };
   };
   
-  const generateTherapistTimeSeriesData = () => {
-    const allBookings = JSON.parse(localStorage.getItem('mindcare_bookings') || '[]');
+  const generateTherapistTimeSeriesData = async () => {
+    const allBookings = await api.bookings.getAll();
     const therapistBookings = allBookings.filter((booking: any) =>
       booking.therapistName === user?.name || booking.therapistId === user?.id
     );

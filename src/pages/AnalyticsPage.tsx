@@ -43,15 +43,39 @@ function AnalyticsPage() {
     setIsLoading(true);
 
     try {
-      // Fetch real data from MongoDB API
-      const [registeredUsers, bookings, moodEntries, cbtRecords, gratitudeEntries, therapistServices] = await Promise.all([
-        api.users.getAll(),
-        api.bookings.getAll(),
-        api.mood.getAll(),
-        api.therapy.getCBTRecords(),
-        api.therapy.getGratitudeEntries(),
-        api.therapistServices.getAll()
-      ]);
+      // TEST MODE: Use mock data
+      const registeredUsers = [
+        { id: 'test-patient-123', name: 'John Doe', email: 'patient@example.com', role: 'patient', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: 'test-therapist-456', name: 'Dr. Sarah Smith', email: 'therapist@example.com', role: 'therapist', hourlyRate: 120, createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: 'test-admin-789', name: 'Admin User', email: 'admin@example.com', role: 'admin', createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
+
+      const bookings = [
+        { id: '1', patientName: 'John Doe', patientId: 'test-patient-123', therapistName: 'Dr. Sarah Smith', therapistId: 'test-therapist-456', status: 'completed', amount: '₹120', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '2', patientName: 'John Doe', patientId: 'test-patient-123', therapistName: 'Dr. Sarah Smith', therapistId: 'test-therapist-456', status: 'completed', amount: '₹120', date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '3', patientName: 'John Doe', patientId: 'test-patient-123', therapistName: 'Dr. Sarah Smith', therapistId: 'test-therapist-456', status: 'confirmed', amount: '₹120', date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '4', patientName: 'John Doe', patientId: 'test-patient-123', therapistName: 'Dr. Sarah Smith', therapistId: 'test-therapist-456', status: 'pending_confirmation', amount: '₹120', date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
+
+      const moodEntries = [
+        { id: '1', userId: 'test-patient-123', mood: 'happy', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '2', userId: 'test-patient-123', mood: 'neutral', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '3', userId: 'test-patient-123', mood: 'calm', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
+
+      const cbtRecords = [
+        { id: '1', userId: 'test-patient-123', situation: 'Work stress', thoughts: 'Feeling overwhelmed', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '2', userId: 'test-patient-123', situation: 'Social anxiety', thoughts: 'Worried about meeting', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
+
+      const gratitudeEntries = [
+        { id: '1', userId: 'test-patient-123', entry: 'Grateful for supportive friends', createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: '2', userId: 'test-patient-123', entry: 'Thankful for good health', createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
+
+      const therapistServices = [
+        { id: 'service-1', therapistId: 'test-therapist-456', therapistName: 'Dr. Sarah Smith', status: 'approved', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() }
+      ];
 
       const sleepLogs = [];
       const availableTherapists = registeredUsers.filter((u: any) => u.role === 'therapist');

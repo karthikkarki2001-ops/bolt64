@@ -21,14 +21,58 @@ function AdminDashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Load pending services
-        const services = await api.therapistService.getAll();
+        // TEST MODE: Use mock data
+        const services = [
+          {
+            id: 'pending-service-1',
+            therapistId: 'new-therapist-1',
+            therapistName: 'Dr. Michael Johnson',
+            qualification: 'PhD in Clinical Psychology',
+            specialization: ['Anxiety', 'Depression', 'CBT'],
+            experience: '10 years',
+            chargesPerSession: 150,
+            status: 'pending',
+            submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: 'pending-service-2',
+            therapistId: 'new-therapist-2',
+            therapistName: 'Dr. Emily Chen',
+            qualification: 'Licensed Therapist',
+            specialization: ['Family Therapy', 'Trauma', 'PTSD'],
+            experience: '7 years',
+            chargesPerSession: 130,
+            status: 'pending',
+            submittedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: 'approved-service-1',
+            therapistId: 'test-therapist-456',
+            therapistName: 'Dr. Sarah Smith',
+            qualification: 'Licensed Clinical Psychologist',
+            specialization: ['CBT', 'Anxiety'],
+            experience: '8 years',
+            chargesPerSession: 120,
+            status: 'approved',
+            submittedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        ];
+
         const pending = services.filter((service: any) => service.status === 'pending');
         setPendingServices(pending);
 
-        // Load analytics
-        const users = await api.users.getAll();
-        const bookings = await api.bookings.getAll();
+        // Mock users and bookings
+        const users = [
+          { id: 'test-patient-123', name: 'John Doe', role: 'patient', status: 'active' },
+          { id: 'test-therapist-456', name: 'Dr. Sarah Smith', role: 'therapist', status: 'active' },
+          { id: 'test-admin-789', name: 'Admin User', role: 'admin', status: 'active' }
+        ];
+
+        const bookings = [
+          { id: '1', patientName: 'John Doe', therapistName: 'Dr. Sarah Smith', status: 'completed', amount: '120', createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
+          { id: '2', patientName: 'John Doe', therapistName: 'Dr. Sarah Smith', status: 'completed', amount: '120', createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() }
+        ];
+
         const therapistServices = services.filter((s: any) => s.status === 'approved');
 
         const analyticsData = {
@@ -63,56 +107,34 @@ function AdminDashboard() {
     };
 
     loadDashboardData();
-    
-    // Set up interval to refresh data
-    const interval = setInterval(() => {
-      loadPendingServices();
-      const updatedAnalytics = updateAnalyticsFromCurrentData();
-      setAnalytics(updatedAnalytics);
-      setRecentActivity(getRecentActivity());
-    }, 5000);
-    
-    // Listen for analytics updates
-    const handleAnalyticsUpdate = () => {
-      const updatedAnalytics = updateAnalyticsFromCurrentData();
-      setAnalytics(updatedAnalytics);
-      setRecentActivity(getRecentActivity());
-    };
-    
-    window.addEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('mindcare-analytics-updated', handleAnalyticsUpdate);
-    };
   }, []);
 
   const stats = analytics ? [
     {
       title: 'Total Users',
-      value: analytics.users.totalUsers.toLocaleString(),
-      change: `+${analytics.users.userGrowthRate}% from last month`,
+      value: analytics.totalUsers.toLocaleString(),
+      change: `${analytics.activeUsers} active users`,
       icon: Users,
       color: 'from-blue-500 to-cyan-500'
     },
     {
       title: 'Active Therapists',
-      value: analytics.therapists.activeTherapists.toString(),
-      change: `${analytics.therapists.pendingApprovals} pending approval`,
+      value: analytics.totalTherapists.toString(),
+      change: `${analytics.pendingApprovals} pending approval`,
       icon: UserCheck,
       color: 'from-green-500 to-teal-500'
     },
     {
       title: 'Platform Revenue',
-      value: `₹${analytics.revenue.totalRevenue.toLocaleString()}`,
-      change: `+${analytics.revenue.revenueGrowthRate}% from last month`,
+      value: `₹${analytics.revenue.toLocaleString()}`,
+      change: `${analytics.totalPatients} total patients`,
       icon: DollarSign,
       color: 'from-purple-500 to-pink-500'
     },
     {
       title: 'Total Sessions',
-      value: analytics.sessions.totalSessions.toString(),
-      change: `${analytics.sessions.sessionCompletionRate.toFixed(1)}% completion rate`,
+      value: analytics.totalSessions.toString(),
+      change: 'All completed sessions',
       icon: BarChart3,
       color: 'from-orange-500 to-red-500'
     }
@@ -138,36 +160,17 @@ function AdminDashboard() {
   };
 
   const handleApproveTherapist = async (id: string) => {
-    try {
-      await api.therapistService.update(id, {
-        status: 'approved',
-        approvedAt: new Date().toISOString()
-      });
-
-      // Reload pending services
-      const services = await api.therapistService.getAll();
-      const pending = services.filter((service: any) => service.status === 'pending');
-      setPendingServices(pending);
-
-    } catch (error) {
-      console.error('Failed to approve therapist:', error);
-      toast.error('Failed to approve therapist');
-    }
+    // TEST MODE: Update local state
+    const updatedServices = pendingServices.filter((service: any) => service.id !== id);
+    setPendingServices(updatedServices);
+    toast.success('Therapist approved successfully!');
   };
 
   const handleRejectTherapist = async (id: string) => {
-    try {
-      await api.therapistService.update(id, { status: 'rejected' });
-
-      // Reload pending services
-      const services = await api.therapistService.getAll();
-      const pending = services.filter((service: any) => service.status === 'pending');
-      setPendingServices(pending);
-
-    } catch (error) {
-      console.error('Failed to reject therapist:', error);
-      toast.error('Failed to reject therapist');
-    }
+    // TEST MODE: Update local state
+    const updatedServices = pendingServices.filter((service: any) => service.id !== id);
+    setPendingServices(updatedServices);
+    toast.success('Therapist rejected successfully!');
   };
 
   const getIconComponent = (iconName: string) => {

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const MONGODB_URI = 'mongodb+srv://karthik:karthik123@cluster0.tcvbs.mongodb.net/mental_health2';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://your-username:your-password@cluster0.mongodb.net/mindcare';
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },

@@ -74,22 +74,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string, role?: string): Promise<boolean> => {
-    try {
-      const response = await api.auth.login(email, password, role);
-
-      if (response.success && response.user) {
-        setUser(response.user);
-        localStorage.setItem('mindcare_user', JSON.stringify(response.user));
-        toast.success('Login successful!');
-        return true;
+    // TEST MODE: Use mock data for frontend development
+    const mockUsers: Record<string, User> = {
+      'patient@example.com': {
+        id: 'test-patient-123',
+        email: 'patient@example.com',
+        name: 'John Doe',
+        role: 'patient',
+        age: 28,
+        emergencyContactEmail: 'emergency@example.com',
+        emergencyContactRelation: 'parent',
+        verified: true
+      },
+      'therapist@example.com': {
+        id: 'test-therapist-456',
+        email: 'therapist@example.com',
+        name: 'Dr. Sarah Smith',
+        role: 'therapist',
+        specialization: 'Cognitive Behavioral Therapy',
+        hourlyRate: 120,
+        licenseNumber: 'LIC123456',
+        experience: '8 years',
+        phone: '+1 (555) 234-5678',
+        bio: 'Experienced therapist specializing in CBT with a passion for helping patients overcome anxiety and depression.',
+        verified: true
+      },
+      'admin@example.com': {
+        id: 'test-admin-789',
+        email: 'admin@example.com',
+        name: 'Admin User',
+        role: 'admin',
+        verified: true
       }
+    };
 
-      toast.error('Login failed');
-      return false;
-    } catch (error: any) {
-      toast.error(error.message || 'Login failed');
-      return false;
+    const mockUser = mockUsers[email];
+
+    if (mockUser && password === 'password') {
+      setUser(mockUser);
+      localStorage.setItem('mindcare_user', JSON.stringify(mockUser));
+      localStorage.setItem('mindcare_token', 'test-jwt-token-' + mockUser.role);
+      toast.success('Login successful! (Test Mode)');
+      return true;
     }
+
+    toast.error('Invalid credentials. Use: patient@example.com / password');
+    return false;
   };
 
   const register = async (userData: RegisterData): Promise<boolean> => {

@@ -28,6 +28,7 @@ function VideoSessionPage() {
   const [participants, setParticipants] = useState<any[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     // Load session data from mock service
@@ -56,6 +57,48 @@ function VideoSessionPage() {
   }, [sessionId, navigate, user]);
 
   useEffect(() => {
+    // Initialize camera and microphone when session starts
+    const initializeMedia = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        localStreamRef.current = stream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        toast.success('Camera and microphone connected!');
+      } catch (error) {
+        console.error('Error accessing media devices:', error);
+        toast.error('Failed to access camera or microphone. Please check permissions.');
+      }
+    };
+
+    if (isSessionActive) {
+      initializeMedia();
+    }
+
+    // Cleanup function
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isSessionActive]);
+
+  useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isSessionActive) {
       interval = setInterval(() => {
@@ -72,23 +115,40 @@ function VideoSessionPage() {
   };
 
   const toggleVideo = () => {
-    setIsVideoOn(!isVideoOn);
-    toast.success(isVideoOn ? 'Camera turned off' : 'Camera turned on');
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoOn(videoTrack.enabled);
+        toast.success(videoTrack.enabled ? 'Camera turned on' : 'Camera turned off');
+      }
+    }
   };
 
   const toggleAudio = () => {
-    setIsAudioOn(!isAudioOn);
-    toast.success(isAudioOn ? 'Microphone muted' : 'Microphone unmuted');
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsAudioOn(audioTrack.enabled);
+        toast.success(audioTrack.enabled ? 'Microphone unmuted' : 'Microphone muted');
+      }
+    }
   };
 
   const endSession = () => {
     setIsSessionActive(false);
 
+    // Stop all media tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+
     // Update session status using mock service
     mockDataService.updateBooking(sessionId || '', {
       status: 'completed'
     });
-    
+
     // Track session completion
     if (sessionData) {
       trackSessionComplete({
@@ -96,10 +156,10 @@ function VideoSessionPage() {
         therapistId: sessionData.therapistId,
         sessionType: sessionData.sessionType || 'video',
         duration: sessionTime,
-        rating: 5 // Default rating
+        rating: 5
       });
     }
-    
+
     toast.success('Session ended successfully!');
     navigate('/dashboard');
   };
@@ -177,7 +237,7 @@ function VideoSessionPage() {
         {/* Video Area */}
         <div className="flex-1 p-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
-            {/* Remote Video */}
+            {/* Remote Video - Placeholder for other participant */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -185,6 +245,12 @@ function VideoSessionPage() {
                 theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
               }`}
             >
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover hidden"
+              />
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -198,7 +264,7 @@ function VideoSessionPage() {
                   <p className={`text-sm ${
                     theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                   }`}>
-                    Video will appear here
+                    Waiting for connection...
                   </p>
                 </div>
               </div>
@@ -220,23 +286,32 @@ function VideoSessionPage() {
                 theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
               }`}
             >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Camera className="w-10 h-10 text-blue-600" />
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${!isVideoOn ? 'hidden' : ''}`}
+              />
+              {!isVideoOn && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <VideoOff className="w-10 h-10 text-blue-600" />
+                    </div>
+                    <p className={`font-semibold ${
+                      theme === 'dark' ? 'text-white' : 'text-gray-800'
+                    }`}>
+                      You
+                    </p>
+                    <p className={`text-sm ${
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Camera Off
+                    </p>
                   </div>
-                  <p className={`font-semibold ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-800'
-                  }`}>
-                    You
-                  </p>
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                  }`}>
-                    {isVideoOn ? 'Camera On' : 'Camera Off'}
-                  </p>
                 </div>
-              </div>
+              )}
               <div className="absolute top-4 left-4">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   theme === 'dark' ? 'bg-gray-900/80 text-white' : 'bg-white/80 text-gray-800'
@@ -244,6 +319,13 @@ function VideoSessionPage() {
                   You
                 </span>
               </div>
+              {isVideoOn && !isAudioOn && (
+                <div className="absolute bottom-4 right-4">
+                  <div className="bg-red-500 text-white p-2 rounded-full">
+                    <MicOff className="w-5 h-5" />
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
 

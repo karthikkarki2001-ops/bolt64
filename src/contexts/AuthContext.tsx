@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import toast from 'react-hot-toast';
-import { trackUserRegistration, trackTherapistRegistration } from '../utils/analyticsManager';
-import { useAuth as useAuthHook } from './AuthContext';
+import { api, setAuthToken, getAuthToken } from '../services/api';
 
 interface User {
   id: string;
@@ -64,179 +63,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
     const savedUser = localStorage.getItem('mindcare_user');
-    if (savedUser) {
+    const token = getAuthToken();
+
+    if (savedUser && token) {
       setUser(JSON.parse(savedUser));
     }
-    
-    // Listen for user updates from other tabs/components
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mindcare_user' && e.newValue) {
-        setUser(JSON.parse(e.newValue));
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
+
     setLoading(false);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
   }, []);
 
   const login = async (email: string, password: string, role?: string): Promise<boolean> => {
     try {
-      // Load all registered users from localStorage
-      const registeredUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-      
-      // Load demo users with any updates
-      const demoUsers = JSON.parse(localStorage.getItem('mindcare_demo_users') || '[]');
-      
-      // Predefined demo users
-      const defaultDemoUsers = [
-        {
-          id: '1',
-          email: 'patient@example.com',
-          name: 'John Doe',
-          role: 'patient' as const,
-          emergencyContactEmail: 'emergency@example.com',
-          emergencyContactRelation: 'parent',
-          age: 28
-        },
-        {
-          id: '2',
-          email: 'therapist@example.com',
-          name: 'Dr. Sarah Smith',
-          role: 'therapist' as const,
-          specialization: 'Cognitive Behavioral Therapy',
-          hourlyRate: 120,
-          licenseNumber: 'LIC123456',
-          verified: true,
-          experience: '8 years',
-          phone: '+1 (555) 234-5678',
-          bio: 'Experienced therapist specializing in CBT with a passion for helping patients overcome anxiety and depression.',
-          availability: [
-            'Monday 9:00 AM', 'Monday 10:00 AM', 'Monday 11:00 AM', 'Monday 12:00 PM', 
-            'Monday 1:00 PM', 'Monday 2:00 PM', 'Monday 3:00 PM', 'Monday 4:00 PM', 'Monday 5:00 PM',
-            'Tuesday 9:00 AM', 'Tuesday 10:00 AM', 'Tuesday 11:00 AM', 'Tuesday 12:00 PM',
-            'Tuesday 1:00 PM', 'Tuesday 2:00 PM', 'Tuesday 3:00 PM', 'Tuesday 4:00 PM', 'Tuesday 5:00 PM',
-            'Wednesday 9:00 AM', 'Wednesday 10:00 AM', 'Wednesday 11:00 AM', 'Wednesday 12:00 PM',
-            'Wednesday 1:00 PM', 'Wednesday 2:00 PM', 'Wednesday 3:00 PM', 'Wednesday 4:00 PM', 'Wednesday 5:00 PM',
-            'Thursday 9:00 AM', 'Thursday 10:00 AM', 'Thursday 11:00 AM', 'Thursday 12:00 PM',
-            'Thursday 1:00 PM', 'Thursday 2:00 PM', 'Thursday 3:00 PM', 'Thursday 4:00 PM', 'Thursday 5:00 PM',
-            'Friday 9:00 AM', 'Friday 10:00 AM', 'Friday 11:00 AM', 'Friday 12:00 PM',
-            'Friday 1:00 PM', 'Friday 2:00 PM', 'Friday 3:00 PM', 'Friday 4:00 PM', 'Friday 5:00 PM'
-          ]
-        },
-        {
-          id: '3',
-          email: 'admin@example.com',
-          name: 'Admin User',
-          role: 'admin' as const
-        }
-      ];
-      
-      // Merge default demo users with any updated demo user data
-      const mergedDemoUsers = defaultDemoUsers.map(defaultUser => {
-        const updatedUser = demoUsers.find((u: any) => u.id === defaultUser.id);
-        return updatedUser ? { ...defaultUser, ...updatedUser } : defaultUser;
-      });
-      
-      // Combine demo users with registered users
-      const allUsers = [...mergedDemoUsers, ...registeredUsers];
+      const response = await api.auth.login(email, password, role);
 
-      // Find user by email first, then check role if specified
-      const foundUser = allUsers.find(u => u.email === email);
-      
-      // Check if user exists and password matches (demo users use 'password', registered users use their actual password)
-      const isValidPassword = foundUser && (
-        password === 'password' || // Demo users
-        (registeredUsers.some((u: any) => u.email === email) && password.length >= 8) // Registered users (simplified check)
-      );
-      
-      // Check role if specified
-      const roleMatches = !role || foundUser?.role === role;
-      
-      if (foundUser && isValidPassword && roleMatches) {
-        setUser(foundUser);
-        localStorage.setItem('mindcare_user', JSON.stringify(foundUser));
+      if (response.success && response.user) {
+        setUser(response.user);
+        localStorage.setItem('mindcare_user', JSON.stringify(response.user));
         toast.success('Login successful!');
         return true;
-      } else {
-        if (!foundUser) {
-          toast.error('User not found. Please check your email or register first.');
-        } else if (!isValidPassword) {
-          toast.error('Invalid password');
-        } else if (!roleMatches) {
-          toast.error(`This account is not registered as a ${role}`);
-        }
-        return false;
       }
-    } catch (error) {
+
       toast.error('Login failed');
+      return false;
+    } catch (error: any) {
+      toast.error(error.message || 'Login failed');
       return false;
     }
   };
 
   const register = async (userData: RegisterData): Promise<boolean> => {
     try {
-      // Load existing registered users
-      const existingUsers = JSON.parse(localStorage.getItem('mindcare_registered_users') || '[]');
-      
-      // Check if user already exists
-      if (existingUsers.some((u: any) => u.email === userData.email)) {
-        toast.error('User with this email already exists');
-        return false;
-      }
-      
-      // Create new user
-      const newUser: User = {
-        id: Date.now().toString(),
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        status: userData.role === 'therapist' ? 'pending' : undefined,
-        ...(userData.emergencyContactEmail && { emergencyContactEmail: userData.emergencyContactEmail }),
-        ...(userData.emergencyContactRelation && { emergencyContactRelation: userData.emergencyContactRelation }),
-        ...(userData.age && { age: userData.age }),
-        ...(userData.specialization && { specialization: userData.specialization }),
-        ...(userData.location && { location: userData.location }),
-        ...(userData.hourlyRate && { hourlyRate: userData.hourlyRate }),
-        ...(userData.licenseNumber && { licenseNumber: userData.licenseNumber }),
-        verified: userData.role === 'patient'
-      };
+      const response = await api.auth.register(userData);
 
-      // Save to registered users list
-      const updatedUsers = [...existingUsers, newUser];
-      localStorage.setItem('mindcare_registered_users', JSON.stringify(updatedUsers));
+      if (response.success && response.user) {
+        setUser(response.user);
+        localStorage.setItem('mindcare_user', JSON.stringify(response.user));
 
-      setUser(newUser);
-      localStorage.setItem('mindcare_user', JSON.stringify(newUser));
-      
-      // Track user registration in analytics
-      trackUserRegistration(newUser);
-      
-      // If therapist, also track therapist registration
-      if (userData.role === 'therapist') {
-        trackTherapistRegistration({
-          therapistId: newUser.id,
-          therapistName: newUser.name,
-          specialization: [userData.specialization || 'General Therapy']
+        await api.analytics.trackEvent({
+          type: 'user_registration',
+          userId: response.user.id,
+          data: {
+            name: response.user.name,
+            email: response.user.email,
+            role: response.user.role
+          },
+          timestamp: new Date()
         });
+
+        if (userData.role === 'therapist') {
+          await api.analytics.trackEvent({
+            type: 'therapist_registration',
+            therapistId: response.user.id,
+            data: {
+              name: response.user.name,
+              specialization: [userData.specialization || 'General Therapy']
+            },
+            timestamp: new Date()
+          });
+        }
+
+        toast.success('Registration successful!');
+        return true;
       }
-      
-      toast.success('Registration successful!');
-      return true;
-    } catch (error) {
+
       toast.error('Registration failed');
+      return false;
+    } catch (error: any) {
+      toast.error(error.message || 'Registration failed');
       return false;
     }
   };
 
   const logout = () => {
     setUser(null);
+    api.auth.logout();
     localStorage.removeItem('mindcare_user');
     toast.success('Logged out successfully');
   };
@@ -244,27 +145,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = (userData: User) => {
     setUser(userData);
     localStorage.setItem('mindcare_user', JSON.stringify(userData));
-    
-    // If this is a demo user, also update the demo users storage
-    const isDemoUser = userData.email === 'admin@example.com' || userData.email === 'patient@example.com' || userData.email === 'therapist@example.com';
-    if (isDemoUser) {
-      const demoUsers = JSON.parse(localStorage.getItem('mindcare_demo_users') || '[]');
-      const existingIndex = demoUsers.findIndex((u: any) => u.id === userData.id);
-      
-      if (existingIndex !== -1) {
-        demoUsers[existingIndex] = userData;
-      } else {
-        demoUsers.push(userData);
-      }
-      localStorage.setItem('mindcare_demo_users', JSON.stringify(demoUsers));
-    }
-    
-    // Trigger storage event for other tabs
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'mindcare_user',
-      newValue: JSON.stringify(userData)
-    }));
+
+    api.users.update(userData.id, userData).catch(err => {
+      console.error('Failed to update user on server:', err);
+    });
   };
+
   const value = {
     user,
     loading,

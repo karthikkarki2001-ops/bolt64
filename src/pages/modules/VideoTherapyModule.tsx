@@ -10,6 +10,8 @@ import toast from 'react-hot-toast';
 import { updateStreak } from '../../utils/streakManager';
 import { updateTherapyCompletion } from '../../utils/therapyProgressManager';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAllTherapies } from '../../utils/therapyStorage';
+import { getTherapyContent } from '../../utils/therapyContentStorage';
 
 interface VideoSession {
   id: string;
@@ -146,41 +148,75 @@ function VideoTherapyModule() {
   const categories = ['All', 'Anxiety', 'Mindfulness', 'CBT', 'Trauma', 'Relationships', 'Sleep'];
   const [selectedCategory, setSelectedCategory] = useState('All');
 
+  const loadVideoSessions = () => {
+    // Load admin-managed content from new storage system
+    const therapies = getAllTherapies();
+    const videoTherapy = therapies.find(t =>
+      t.title.toLowerCase().includes('video')
+    );
+
+    console.log('Loading video sessions...');
+    console.log('Found video therapy:', videoTherapy);
+
+    if (videoTherapy) {
+      const content = getTherapyContent(videoTherapy.id);
+      console.log('Loaded video therapy content:', content);
+
+      if (content && content.contentData) {
+        const { videos } = content.contentData as any;
+        console.log('Found videos:', videos);
+
+        if (videos && videos.length > 0) {
+          const adminVideos = videos.map((video: any) => ({
+            id: video.id,
+            title: video.title,
+            description: video.description || '',
+            therapist: 'Professional Therapist',
+            duration: video.duration,
+            category: 'Therapy',
+            difficulty: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced',
+            topics: [],
+            thumbnail: video.thumbnailUrl || 'https://images.pexels.com/photos/5327580/pexels-photo-5327580.jpeg?auto=compress&cs=tinysrgb&w=300',
+            videoUrl: video.url,
+            completed: false,
+            rating: 4.5,
+            exercises: []
+          }));
+          console.log('Processed admin videos:', adminVideos);
+          setVideoSessions([...defaultVideoSessions, ...adminVideos]);
+        } else {
+          console.log('No videos found in content');
+          setVideoSessions(defaultVideoSessions);
+        }
+      } else {
+        console.log('No content data found');
+        setVideoSessions(defaultVideoSessions);
+      }
+    } else {
+      console.log('Video therapy not found');
+      setVideoSessions(defaultVideoSessions);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('mindcare_video_progress');
     if (saved) {
       setWatchProgress(JSON.parse(saved));
     }
-    
-    // Load admin-managed content
-    const adminContent = localStorage.getItem('mindcare_therapy_content');
-    if (adminContent) {
-      const parsedData = JSON.parse(adminContent);
-      const therapyData = Array.isArray(parsedData) ? parsedData : [];
-      const videoModule = therapyData.find((m: any) => m.id === 'video');
-      if (videoModule && videoModule.content.length > 0) {
-        const adminVideos = videoModule.content.map((content: any) => ({
-          id: content.id,
-          title: content.title,
-          description: content.description,
-          therapist: content.therapist || 'Professional Therapist',
-          duration: content.duration * 60, // Convert minutes to seconds
-          category: content.category,
-          difficulty: content.difficulty,
-          topics: content.instructions || [],
-          thumbnail: content.thumbnail || 'https://images.pexels.com/photos/5327580/pexels-photo-5327580.jpeg?auto=compress&cs=tinysrgb&w=300',
-          videoUrl: content.videoUrl || '/videos/placeholder.mp4',
-          completed: false,
-          rating: content.rating,
-          exercises: content.benefits || []
-        }));
-        setVideoSessions([...defaultVideoSessions, ...adminVideos]);
-      } else {
-        setVideoSessions(defaultVideoSessions);
-      }
-    } else {
-      setVideoSessions(defaultVideoSessions);
-    }
+
+    loadVideoSessions();
+
+    // Listen for content updates
+    const handleContentUpdate = () => {
+      console.log('Content updated, reloading videos...');
+      loadVideoSessions();
+    };
+
+    window.addEventListener('therapy-contents-updated', handleContentUpdate);
+
+    return () => {
+      window.removeEventListener('therapy-contents-updated', handleContentUpdate);
+    };
   }, []);
 
   const filteredVideos = videoSessions.filter(video => 

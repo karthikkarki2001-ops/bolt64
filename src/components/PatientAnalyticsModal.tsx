@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  X, BarChart3, TrendingUp, Heart, Brain, Target, 
-  Calendar, Clock, Star, Award, Activity, Smile, 
+import {
+  X, BarChart3, TrendingUp, Heart, Brain, Target,
+  Calendar, Clock, Star, Award, Activity, Smile,
   Meh, Frown, Download, Filter
 } from 'lucide-react';
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { useTheme } from '../contexts/ThemeContext';
 import toast from 'react-hot-toast';
 import { getPatientProgress } from '../utils/therapyProgressManager';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 
 interface PatientAnalyticsModalProps {
   patient: any;
@@ -48,20 +48,18 @@ function PatientAnalyticsModal({ patient, isOpen, onClose }: PatientAnalyticsMod
     }
   }, [isOpen, patient]);
 
-  const loadPatientData = async () => {
+  const loadPatientData = () => {
     setLoading(true);
 
     try {
       // Load therapy progress from new system
       const therapyProgress = getPatientProgress(patient.id);
 
-      // Fetch all patient activity data from MongoDB API
-      const [allMoodEntries, allCbtRecords, allGratitudeEntries, allTherapySessions] = await Promise.all([
-        api.mood.getAll(patient.id),
-        api.therapy.getCBTRecords(patient.id),
-        api.therapy.getGratitudeEntries(patient.id),
-        api.therapy.getSessions({ userId: patient.id })
-      ]);
+      // Fetch all patient activity data from mock service
+      const allMoodEntries = mockDataService.getMoodEntriesByUser(patient.id);
+      const allCbtRecords = mockDataService.getCBTRecordsByUser(patient.id);
+      const allGratitudeEntries = mockDataService.getGratitudeEntriesByUser(patient.id);
+      const allTherapySessions: any[] = [];
 
       // Filter mood entries for this patient
       const moodEntries = allMoodEntries.filter((entry: any) =>

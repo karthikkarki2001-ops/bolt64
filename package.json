@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "server": "nodemon --exec ts-node server/index.ts",
     "server:build": "tsc -p server/tsconfig.json",
-    "migrate": "node scripts/migrate-data.cjs"
+    "migrate": "node scripts/migrate-data.cjs",
+    "seed": "ts-node server/seed.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.7",

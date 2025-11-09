@@ -14,6 +14,9 @@ import streakRoutes from './routes/streakRoutes';
 import therapyModuleRoutes from './routes/therapyModuleRoutes';
 import therapyContentRoutes from './routes/therapyContentRoutes';
 import achievementRoutes from './routes/achievementRoutes';
+import exposureRoutes from './routes/exposureRoutes';
+import stressRoutes from './routes/stressRoutes';
+import videoProgressRoutes from './routes/videoProgressRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,6 +38,9 @@ app.use('/api/streak', streakRoutes);
 app.use('/api/therapy-modules', therapyModuleRoutes);
 app.use('/api/therapy-contents', therapyContentRoutes);
 app.use('/api/achievements', achievementRoutes);
+app.use('/api/exposure', exposureRoutes);
+app.use('/api/stress', stressRoutes);
+app.use('/api/video-progress', videoProgressRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'MindCare API is running' });
